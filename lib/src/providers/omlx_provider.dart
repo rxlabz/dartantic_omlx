@@ -89,6 +89,18 @@ class OmlxProvider
         );
   }
 
+  Future<T> _withClient<T>(Future<T> Function(o.OmlxClient client) action) async {
+    final c = _getClient();
+    final shouldClose = client == null && httpClient == null;
+    try {
+      return await action(c);
+    } finally {
+      if (shouldClose) {
+        c.close();
+      }
+    }
+  }
+
   @override
   ChatModel<OmlxChatOptions> createChatModel({
     String? name,
@@ -170,8 +182,7 @@ class OmlxProvider
   @override
   Stream<ModelInfo> listModels() async* {
     _logger.info('Fetching models from oMLX API');
-    final c = _getClient();
-    final response = await c.models.list();
+    final response = await _withClient((c) => c.models.list());
 
     for (final m in response.data) {
       final kinds = OmlxUtils.inferModelKinds(m.id);
@@ -192,16 +203,17 @@ class OmlxProvider
   // --- oMLX Extensions ---
 
   /// Checks the health and engine pool status of the oMLX server (`GET /health`).
-  Future<o.HealthResponse> health() => _getClient().health();
+  Future<o.HealthResponse> health() => _withClient((c) => c.health());
 
   /// Gets detailed engine status for models from the oMLX server
   /// (`GET /v1/models/status`).
-  Future<List<o.ModelStatus>> modelsStatus() => _getClient().models.status();
+  Future<List<o.ModelStatus>> modelsStatus() =>
+      _withClient((c) => c.models.status());
 
   /// Manually unloads/evicts a model from unified memory
   /// (`POST /v1/models/{model_id}/unload`).
   Future<o.UnloadModelResponse> unloadModel(String modelId) =>
-      _getClient().models.unload(modelId);
+      _withClient((c) => c.models.unload(modelId));
 
   /// Reranks documents based on semantic relevance to a query
   /// (`POST /v1/rerank`).
@@ -213,17 +225,19 @@ class OmlxProvider
     bool returnDocuments = true,
   }) {
     final rerankModel = model ?? 'bge-reranker-large';
-    return _getClient().rerank.rank(
-      model: rerankModel,
-      query: query,
-      documents: documents,
-      topN: topN,
-      returnDocuments: returnDocuments,
+    return _withClient(
+      (c) => c.rerank.rank(
+        model: rerankModel,
+        query: query,
+        documents: documents,
+        topN: topN,
+        returnDocuments: returnDocuments,
+      ),
     );
   }
 
   /// Transcribes audio via Whisper (`POST /v1/audio/transcriptions`).
   Future<o.AudioTranscriptionResponse> transcribeAudio(
     o.AudioTranscriptionRequest request,
-  ) => _getClient().audio.transcribe(request);
+  ) => _withClient((c) => c.audio.transcribe(request));
 }

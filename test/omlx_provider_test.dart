@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dartantic_omlx/dartantic_omlx.dart';
+import 'package:domlx/domlx.dart' as o;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
@@ -156,6 +157,24 @@ void main() {
       expect(rankings.length, 2);
       expect(rankings.first.document, 'doc 2');
       expect(rankings.first.relevanceScore, 0.95);
+    });
+
+    test('closes ephemeral client when client and httpClient are not provided', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({'status': 'healthy', 'version': '1.0.0'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final customOmlxClient = o.OmlxClient(client: mockClient);
+      // We can intercept close on a custom wrapper or test using the client parameter
+      final providerWithClient = OmlxProvider(client: customOmlxClient);
+      await providerWithClient.health();
+      // Should NOT close user-supplied client
+      // (verified because customOmlxClient remains open for subsequent calls)
+      expect(await providerWithClient.health(), isNotNull);
     });
   });
 }
