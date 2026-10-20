@@ -254,6 +254,51 @@ void main() {
       expect(nullableField['type'], 'string');
     });
 
+    test('prepareSchemaForOmlx recursively normalizes anyOf, oneOf, and allOf', () {
+      final inputSchema = {
+        'anyOf': [
+          {
+            'type': 'object',
+            'properties': {'kind': {'type': 'string'}},
+          },
+          {
+            'type': 'object',
+            // Missing properties map
+          },
+        ],
+        'oneOf': [
+          {
+            'type': 'object',
+            'properties': {'val': {'type': 'number'}},
+          },
+        ],
+        'allOf': [
+          {
+            'type': 'object',
+            'format': 'custom',
+          },
+        ],
+      };
+
+      final normalized = prepareSchemaForOmlx(inputSchema, strict: true);
+
+      final anyOfList = normalized['anyOf'] as List;
+      expect(anyOfList.length, 2);
+      expect((anyOfList[0] as Map)['additionalProperties'], false);
+      expect((anyOfList[0] as Map)['required'], ['kind']);
+      expect((anyOfList[1] as Map)['additionalProperties'], false);
+      expect((anyOfList[1] as Map)['properties'], isA<Map>());
+
+      final oneOfList = normalized['oneOf'] as List;
+      expect((oneOfList[0] as Map)['additionalProperties'], false);
+      expect((oneOfList[0] as Map)['required'], ['val']);
+
+      final allOfList = normalized['allOf'] as List;
+      expect((allOfList[0] as Map).containsKey('format'), isFalse);
+      expect((allOfList[0] as Map)['additionalProperties'], false);
+      expect((allOfList[0] as Map)['properties'], isA<Map>());
+    });
+
     test('OmlxToolCallAccumulator merges split delta chunks', () {
       final accumulator = OmlxToolCallAccumulator();
       accumulator.addAll([

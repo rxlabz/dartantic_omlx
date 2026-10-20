@@ -176,6 +176,22 @@ Map<String, dynamic> prepareSchemaForOmlx(
     result[defKey] = processedDefs;
   }
 
+  // Process polymorphic / composition keywords: anyOf, oneOf, allOf
+  for (final key in const ['anyOf', 'oneOf', 'allOf']) {
+    final list = result[key];
+    if (list is List) {
+      result[key] = list.map((item) {
+        if (item is Map) {
+          return prepareSchemaForOmlx(
+            Map<String, dynamic>.from(item),
+            strict: strict,
+          );
+        }
+        return item;
+      }).toList();
+    }
+  }
+
   return result;
 }
 
@@ -183,8 +199,8 @@ Map<String, dynamic> prepareSchemaForOmlx(
 extension OmlxMessageListMapper on List<ChatMessage> {
   /// Converts this conversation into oMLX [o.ChatMessage]s.
   ///
-  /// Tool results are expanded into one `tool` role message per result and
-  /// [ThinkingPart]s are not sent back to the server.
+  /// Tool results are expanded into one `tool` role message per result, and
+  /// [ThinkingPart]s on model messages are preserved as `reasoningContent`.
   List<o.ChatMessage> toOmlxMessages() {
     _logger.fine('Converting $length messages to oMLX format');
     final result = <o.ChatMessage>[];
