@@ -132,6 +132,44 @@ void main() {
       expect((vector[1] - 2.0).abs() < 1e-6, isTrue);
     });
 
+    test('embedDocuments sorts batch items by item.index', () async {
+      final mock = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'object': 'list',
+            'model': 'bge-micro',
+            // Return items out of order: index 1 first, then index 0
+            'data': [
+              {
+                'object': 'embedding',
+                'index': 1,
+                'embedding': [0.2, 0.2],
+              },
+              {
+                'object': 'embedding',
+                'index': 0,
+                'embedding': [0.1, 0.1],
+              },
+            ],
+            'usage': {'prompt_tokens': 4, 'total_tokens': 4},
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final model = OmlxEmbeddingsModel(
+        name: 'bge-micro',
+        httpClient: mock,
+      );
+
+      final result = await model.embedDocuments(['first', 'second']);
+
+      expect(result.output.length, 2);
+      expect(result.output[0], [0.1, 0.1]);
+      expect(result.output[1], [0.2, 0.2]);
+    });
+
     test('embedDocuments returns empty for empty input', () async {
       final model = OmlxEmbeddingsModel(name: 'bge-micro');
       final result = await model.embedDocuments([]);

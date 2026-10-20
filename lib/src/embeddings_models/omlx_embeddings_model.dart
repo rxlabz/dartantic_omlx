@@ -131,7 +131,8 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
 
       final response = await _client.embeddings.create(request);
 
-      for (final item in response.data) {
+      final items = [...response.data]..sort((a, b) => a.index.compareTo(b.index));
+      for (final item in items) {
         final emb = item.embedding;
         if (emb != null) {
           allEmbeddings.add(emb);
