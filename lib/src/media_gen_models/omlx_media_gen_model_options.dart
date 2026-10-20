@@ -7,7 +7,7 @@ class OmlxMediaGenerationModelOptions extends MediaGenerationModelOptions {
   /// Creates a new [OmlxMediaGenerationModelOptions] instance.
   const OmlxMediaGenerationModelOptions({
     this.voice = 'af_heart',
-    this.responseFormat = 'mp3',
+    this.responseFormat,
     this.speed = 1.0,
   });
 
