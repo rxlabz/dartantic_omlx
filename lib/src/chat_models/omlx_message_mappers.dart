@@ -235,6 +235,11 @@ List<o.ChatMessage> _mapUserMessage(ChatMessage message) {
 
 o.ChatMessage _mapModelMessage(ChatMessage message) {
   final text = message.text;
+  final thinkingParts = message.parts.whereType<ThinkingPart>().toList();
+  final reasoningContent = thinkingParts.isNotEmpty
+      ? thinkingParts.map((p) => p.text).join()
+      : null;
+
   final toolCalls = message.toolCalls
       .map(
         (p) => o.ToolCall(
@@ -249,6 +254,7 @@ o.ChatMessage _mapModelMessage(ChatMessage message) {
 
   return o.ChatMessage.assistant(
     text.isEmpty ? null : text,
+    reasoningContent: reasoningContent,
     toolCalls: toolCalls.isEmpty ? null : toolCalls,
   );
 }

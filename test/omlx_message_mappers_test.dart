@@ -106,6 +106,7 @@ void main() {
         ChatMessage(
           role: ChatMessageRole.model,
           parts: const [
+            ThinkingPart('I should check the weather in Paris first.'),
             TextPart('Checking weather...'),
             ToolPart.call(
               callId: 'call_1',
@@ -119,6 +120,10 @@ void main() {
       expect(omlxMessages.length, 1);
       expect(omlxMessages.first.role, 'assistant');
       expect(omlxMessages.first.textContent, 'Checking weather...');
+      expect(
+        omlxMessages.first.reasoningContent,
+        'I should check the weather in Paris first.',
+      );
       expect(omlxMessages.first.toolCalls?.length, 1);
       expect(omlxMessages.first.toolCalls?.first.id, 'call_1');
       expect(
