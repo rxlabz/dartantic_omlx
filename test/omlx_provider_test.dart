@@ -68,6 +68,7 @@ void main() {
             'data': [
               {'id': 'mlx-community/Qwen2.5-7B-Instruct-4bit'},
               {'id': 'bge-micro-embeddings'},
+              {'id': 'BAAI/bge-reranker-large'},
               {'id': 'whisper-large-v3'},
               {'id': 'mlx-community/Kokoro-82M-bf16'},
             ],
@@ -80,18 +81,22 @@ void main() {
       final provider = OmlxProvider(httpClient: mock);
       final models = await provider.listModels().toList();
 
-      expect(models.length, 4);
+      expect(models.length, 5);
       expect(models[0].name, 'mlx-community/Qwen2.5-7B-Instruct-4bit');
       expect(models[0].kinds, contains(ModelKind.chat));
 
       expect(models[1].name, 'bge-micro-embeddings');
       expect(models[1].kinds, contains(ModelKind.embeddings));
 
-      expect(models[2].name, 'whisper-large-v3');
-      expect(models[2].kinds, contains(ModelKind.audio));
+      expect(models[2].name, 'BAAI/bge-reranker-large');
+      expect(models[2].kinds, contains(ModelKind.other));
+      expect(models[2].kinds.contains(ModelKind.embeddings), isFalse);
 
-      expect(models[3].name, 'mlx-community/Kokoro-82M-bf16');
-      expect(models[3].kinds, contains(ModelKind.tts));
+      expect(models[3].name, 'whisper-large-v3');
+      expect(models[3].kinds, contains(ModelKind.audio));
+
+      expect(models[4].name, 'mlx-community/Kokoro-82M-bf16');
+      expect(models[4].kinds, contains(ModelKind.tts));
     });
 
     test('oMLX extensions: health, modelsStatus, unload, rerank', () async {

@@ -67,15 +67,14 @@ abstract final class OmlxUtils {
     final lower = id.toLowerCase();
     final kinds = <ModelKind>{};
 
-    if (lower.contains('embed') ||
+    if (lower.contains('rerank')) {
+      kinds.add(ModelKind.other);
+    } else if (lower.contains('embed') ||
         lower.contains('bge-') ||
         lower.contains('e5-') ||
         lower.contains('minilm') ||
         lower.contains('nomic')) {
       kinds.add(ModelKind.embeddings);
-    }
-    if (lower.contains('rerank')) {
-      kinds.add(ModelKind.other);
     }
     if (lower.contains('tts') ||
         lower.contains('kokoro') ||
