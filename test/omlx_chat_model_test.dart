@@ -165,6 +165,81 @@ void main() {
       expect(results[2].finishReason, FinishReason.stop);
     });
 
+    test('extracts inline <think>...</think> tags in delta.content', () async {
+      final sseLines = [
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-inline',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'qwen',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {
+                'role': 'assistant',
+                'content': '<th',
+              },
+              'finish_reason': null,
+            }
+          ],
+        })}\n\n',
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-inline',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'qwen',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {
+                'content': 'ink>Internal thought process</think>Final answer.',
+              },
+              'finish_reason': 'stop',
+            }
+          ],
+        })}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final mock = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          Stream.fromIterable(sseLines.map(utf8.encode)),
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        );
+      });
+
+      final model = OmlxChatModel(
+        name: 'qwen',
+        enableThinking: true,
+        httpClient: mock,
+      );
+
+      final results = await model.sendStream([
+        ChatMessage.user('Question'),
+      ]).toList();
+
+      // Chunk 1 ('<th') was buffered because it was a potential prefix of '<think>'
+      // Chunk 2 completed '<think>', extracted 'Internal thought process' as ThinkingPart and 'Final answer.' as TextPart
+      final thinkingParts = results
+          .expand((r) => r.output.parts)
+          .whereType<ThinkingPart>()
+          .toList();
+      final textParts = results
+          .expand((r) => r.output.parts)
+          .whereType<TextPart>()
+          .toList();
+
+      expect(thinkingParts.length, 1);
+      expect(thinkingParts.first.text, 'Internal thought process');
+
+      expect(textParts.length, 1);
+      expect(textParts.first.text, 'Final answer.');
+
+      final thinkingDeltas = results.map((r) => r.thinking).whereType<String>().toList();
+      expect(thinkingDeltas.join(), 'Internal thought process');
+    });
+
     test('accumulates tool call deltas across streaming chunks', () async {
       final sseLines = [
         'data: ${jsonEncode({

@@ -88,6 +88,9 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
     o.Usage? usage;
     var chunkCount = 0;
 
+    var inThinkTag = false;
+    final tagBuffer = StringBuffer();
+
     await for (final chunk in _client.chat.createStream(request)) {
       chunkCount++;
       id ??= chunk.id;
@@ -108,10 +111,78 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
 
       final reasoning = delta.reasoningContent;
       final content = delta.content;
+
       final parts = <Part>[
         if (reasoning != null && reasoning.isNotEmpty) ThinkingPart(reasoning),
-        if (content != null && content.isNotEmpty) TextPart(content),
       ];
+      final thinkingDeltas = <String>[
+        if (reasoning != null && reasoning.isNotEmpty) reasoning,
+      ];
+
+      // Parse inline <think>...</think> if present in delta.content
+      if (content != null && content.isNotEmpty) {
+        tagBuffer.write(content);
+        var currentText = tagBuffer.toString();
+        tagBuffer.clear();
+
+        while (currentText.isNotEmpty) {
+          if (!inThinkTag) {
+            final thinkStart = currentText.indexOf('<think>');
+            if (thinkStart != -1) {
+              if (thinkStart > 0) {
+                final before = currentText.substring(0, thinkStart);
+                parts.add(TextPart(before));
+              }
+              inThinkTag = true;
+              currentText = currentText.substring(thinkStart + '<think>'.length);
+            } else {
+              // Check if trailing chars form a prefix of '<think>'
+              final potentialPrefix = _findPotentialTagPrefix(currentText, '<think>');
+              if (potentialPrefix.isNotEmpty) {
+                final safeLength = currentText.length - potentialPrefix.length;
+                if (safeLength > 0) {
+                  parts.add(TextPart(currentText.substring(0, safeLength)));
+                }
+                tagBuffer.write(potentialPrefix);
+                currentText = '';
+              } else {
+                parts.add(TextPart(currentText));
+                currentText = '';
+              }
+            }
+          } else {
+            // Currently inside <think>
+            final thinkEnd = currentText.indexOf('</think>');
+            if (thinkEnd != -1) {
+              if (thinkEnd > 0) {
+                final thinkText = currentText.substring(0, thinkEnd);
+                parts.add(ThinkingPart(thinkText));
+                thinkingDeltas.add(thinkText);
+              }
+              inThinkTag = false;
+              currentText = currentText.substring(thinkEnd + '</think>'.length);
+            } else {
+              // Check if trailing chars form a prefix of '</think>'
+              final potentialPrefix = _findPotentialTagPrefix(currentText, '</think>');
+              if (potentialPrefix.isNotEmpty) {
+                final safeLength = currentText.length - potentialPrefix.length;
+                if (safeLength > 0) {
+                  final thinkText = currentText.substring(0, safeLength);
+                  parts.add(ThinkingPart(thinkText));
+                  thinkingDeltas.add(thinkText);
+                }
+                tagBuffer.write(potentialPrefix);
+                currentText = '';
+              } else {
+                parts.add(ThinkingPart(currentText));
+                thinkingDeltas.add(currentText);
+                currentText = '';
+              }
+            }
+          }
+        }
+      }
+
       if (parts.isEmpty) continue;
 
       final message = ChatMessage(role: ChatMessageRole.model, parts: parts);
@@ -119,7 +190,22 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
         id: chunk.id,
         output: message,
         messages: [message],
-        thinking: reasoning != null && reasoning.isNotEmpty ? reasoning : null,
+        thinking: thinkingDeltas.isNotEmpty ? thinkingDeltas.join() : null,
+        finishReason: FinishReason.unspecified,
+      );
+    }
+
+    // Flush any leftover buffered characters in tagBuffer
+    if (tagBuffer.isNotEmpty) {
+      final leftover = tagBuffer.toString();
+      tagBuffer.clear();
+      final part = inThinkTag ? ThinkingPart(leftover) : TextPart(leftover);
+      final message = ChatMessage(role: ChatMessageRole.model, parts: [part]);
+      yield ChatResult<ChatMessage>(
+        id: id ?? '',
+        output: message,
+        messages: [message],
+        thinking: inThinkTag ? leftover : null,
         finishReason: FinishReason.unspecified,
       );
     }
@@ -156,5 +242,18 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
   @override
   void dispose() {
     if (_ownsClient) _client.close();
+  }
+
+  /// Checks if the end of [text] matches a prefix of [tag].
+  /// Returns the matching prefix, or an empty string if none.
+  static String _findPotentialTagPrefix(String text, String tag) {
+    final maxCheck = text.length < tag.length ? text.length : tag.length - 1;
+    for (var len = maxCheck; len > 0; len--) {
+      final suffix = text.substring(text.length - len);
+      if (tag.startsWith(suffix)) {
+        return suffix;
+      }
+    }
+    return '';
   }
 }
