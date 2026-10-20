@@ -89,7 +89,9 @@ class OmlxProvider
         );
   }
 
-  Future<T> _withClient<T>(Future<T> Function(o.OmlxClient client) action) async {
+  Future<T> _withClient<T>(
+    Future<T> Function(o.OmlxClient client) action,
+  ) async {
     final c = _getClient();
     final shouldClose = client == null && httpClient == null;
     try {
@@ -194,7 +196,6 @@ class OmlxProvider
         extra: {
           if (m.created != null) 'created': m.created,
           if (m.ownedBy != null) 'owned_by': m.ownedBy,
-          ...m.extra,
         },
       );
     }

@@ -19,6 +19,7 @@ class OmlxChatOptions extends ChatModelOptions {
     this.stop,
     this.user,
     this.includeUsage,
+    this.chatTemplateKwargs,
     this.extra,
   });
 
@@ -57,8 +58,12 @@ class OmlxChatOptions extends ChatModelOptions {
   /// `stream_options.include_usage`. Defaults to `true`.
   final bool? includeUsage;
 
+  /// Additional arguments passed directly to the model's HuggingFace Jinja chat template
+  /// via `chat_template_kwargs` (e.g. `{'enable_thinking': false}`).
+  final Map<String, dynamic>? chatTemplateKwargs;
+
   /// Additional oMLX or vendor-specific request parameters, merged into the
-  /// request body (e.g. `{'chat_template_kwargs': {...}}`).
+  /// request body (e.g. `{'repetition_context_size': 20}`).
   final Map<String, dynamic>? extra;
 
   /// Returns a copy where each field of [other] that is non-null overrides
@@ -76,6 +81,10 @@ class OmlxChatOptions extends ChatModelOptions {
       stop: other.stop ?? stop,
       user: other.user ?? user,
       includeUsage: other.includeUsage ?? includeUsage,
+      chatTemplateKwargs: {
+        ...?chatTemplateKwargs,
+        ...?other.chatTemplateKwargs,
+      },
       extra: {...?extra, ...?other.extra},
     );
   }

@@ -19,12 +19,31 @@ o.ChatCompletionRequest buildChatCompletionRequest(
   Schema? outputSchema,
   bool enableThinking = false,
 }) {
+  final chatTemplateKwargs = <String, dynamic>{
+    'enable_thinking': enableThinking,
+    ...?options.chatTemplateKwargs,
+  };
+
+  // Merge extra parameters if options.extra has chat_template_kwargs
+  final extraMap = Map<String, dynamic>.from(options.extra ?? const {});
+  final rawExtraChatKwargs = extraMap.remove('chat_template_kwargs');
+  if (rawExtraChatKwargs is Map) {
+    chatTemplateKwargs.addAll(Map<String, dynamic>.from(rawExtraChatKwargs));
+  }
+
+  // Handle stream_options merging if present in extraMap
+  final streamOptions = <String, dynamic>{
+    if (options.includeUsage ?? true) 'include_usage': true,
+  };
+  final rawExtraStreamOptions = extraMap.remove('stream_options');
+  if (rawExtraStreamOptions is Map) {
+    streamOptions.addAll(Map<String, dynamic>.from(rawExtraStreamOptions));
+  }
+
   final extra = <String, dynamic>{
-    if (options.includeUsage ?? true)
-      'stream_options': {'include_usage': true},
-    if (enableThinking)
-      'chat_template_kwargs': {'enable_thinking': true},
-    ...?options.extra,
+    if (streamOptions.isNotEmpty) 'stream_options': streamOptions,
+    'chat_template_kwargs': chatTemplateKwargs,
+    ...extraMap,
   };
 
   return o.ChatCompletionRequest(

@@ -176,6 +176,43 @@ void main() {
       expect(rawSchema['required'], contains('fruits'));
     });
 
+    test('buildChatCompletionRequest deep-merges chat_template_kwargs and sets explicit enable_thinking', () {
+      // 1. When enableThinking is false, explicit enable_thinking: false is sent
+      final req1 = buildChatCompletionRequest(
+        [ChatMessage.user('Hi')],
+        modelName: 'test-model',
+        options: const OmlxChatOptions(),
+        enableThinking: false,
+      );
+      expect(
+        req1.extra['chat_template_kwargs'],
+        {'enable_thinking': false},
+      );
+
+      // 2. When enableThinking is true and options has custom kwargs, they are deep-merged
+      final req2 = buildChatCompletionRequest(
+        [ChatMessage.user('Hi')],
+        modelName: 'test-model',
+        options: const OmlxChatOptions(
+          chatTemplateKwargs: {'custom_param': 123},
+          extra: {
+            'chat_template_kwargs': {'nested': true},
+            'other_param': 'test',
+          },
+        ),
+        enableThinking: true,
+      );
+      expect(
+        req2.extra['chat_template_kwargs'],
+        {
+          'enable_thinking': true,
+          'custom_param': 123,
+          'nested': true,
+        },
+      );
+      expect(req2.extra['other_param'], 'test');
+    });
+
     test('prepareSchemaForOmlx recursively adds additionalProperties: false and ensures properties', () {
       final inputSchema = {
         'type': 'object',
