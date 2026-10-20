@@ -10,7 +10,6 @@ class OmlxEmbeddingsModelOptions extends EmbeddingsModelOptions {
     super.batchSize,
     this.encodingFormat,
     this.user,
-    this.extra,
   });
 
   /// Optional encoding format: `"float"` (default) or `"base64"`.
@@ -18,9 +17,6 @@ class OmlxEmbeddingsModelOptions extends EmbeddingsModelOptions {
 
   /// Optional user identifier for tracking.
   final String? user;
-
-  /// Extra custom parameters passed to the request.
-  final Map<String, dynamic>? extra;
 
   /// Returns a copy with non-null fields from [other] overriding this instance.
   OmlxEmbeddingsModelOptions mergeWith(OmlxEmbeddingsModelOptions? other) {
@@ -30,7 +26,6 @@ class OmlxEmbeddingsModelOptions extends EmbeddingsModelOptions {
       batchSize: other.batchSize ?? batchSize,
       encodingFormat: other.encodingFormat ?? encodingFormat,
       user: other.user ?? user,
-      extra: {...?extra, ...?other.extra},
     );
   }
 }

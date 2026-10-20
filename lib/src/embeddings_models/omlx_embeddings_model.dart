@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dartantic_interface/dartantic_interface.dart';
 import 'package:domlx/domlx.dart' as o;
 import 'package:http/http.dart' as http;
@@ -132,6 +135,8 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
         final emb = item.embedding;
         if (emb != null) {
           allEmbeddings.add(emb);
+        } else if (item.base64Embedding != null && item.base64Embedding!.isNotEmpty) {
+          allEmbeddings.add(_decodeBase64Float32(item.base64Embedding!));
         }
       }
 
@@ -162,6 +167,17 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
       chunks.add(list.sublist(i, end));
     }
     return chunks;
+  }
+
+  static List<double> _decodeBase64Float32(String base64String) {
+    final bytes = base64Decode(base64String);
+    final byteData = ByteData.sublistView(Uint8List.fromList(bytes));
+    final count = byteData.lengthInBytes ~/ 4;
+    final floats = <double>[];
+    for (var i = 0; i < count; i++) {
+      floats.add(byteData.getFloat32(i * 4, Endian.little));
+    }
+    return floats;
   }
 
   @override
