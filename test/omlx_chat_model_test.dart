@@ -240,6 +240,76 @@ void main() {
       expect(thinkingDeltas.join(), 'Internal thought process');
     });
 
+    test('treats <think> in delta.content as literal text when server sends reasoning_content', () async {
+      final sseLines = [
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-think',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'deepseek-r1',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {
+                'role': 'assistant',
+                'reasoning_content': 'Backend extracted thinking',
+              },
+              'finish_reason': null,
+            }
+          ],
+        })}\n\n',
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-think',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'deepseek-r1',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {
+                'content': 'Here is code: <think>tag inside code</think>',
+              },
+              'finish_reason': 'stop',
+            }
+          ],
+        })}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final mock = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          Stream.fromIterable(sseLines.map(utf8.encode)),
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        );
+      });
+
+      final model = OmlxChatModel(
+        name: 'deepseek-r1',
+        enableThinking: true,
+        httpClient: mock,
+      );
+
+      final results = await model.sendStream([
+        ChatMessage.user('Question'),
+      ]).toList();
+
+      final thinkingParts = results
+          .expand((r) => r.output.parts)
+          .whereType<ThinkingPart>()
+          .toList();
+      final textParts = results
+          .expand((r) => r.output.parts)
+          .whereType<TextPart>()
+          .toList();
+
+      expect(thinkingParts.length, 1);
+      expect(thinkingParts.first.text, 'Backend extracted thinking');
+
+      expect(textParts.length, 1);
+      expect(textParts.first.text, 'Here is code: <think>tag inside code</think>');
+    });
+
     test('accumulates tool call deltas across streaming chunks', () async {
       final sseLines = [
         'data: ${jsonEncode({

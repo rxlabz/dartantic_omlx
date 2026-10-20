@@ -88,6 +88,7 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
     o.Usage? usage;
     var chunkCount = 0;
 
+    var serverSentReasoning = false;
     var inThinkTag = false;
     final tagBuffer = StringBuffer();
 
@@ -112,6 +113,10 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
       final reasoning = delta.reasoningContent;
       final content = delta.content;
 
+      if (reasoning != null && reasoning.isNotEmpty) {
+        serverSentReasoning = true;
+      }
+
       final parts = <Part>[
         if (reasoning != null && reasoning.isNotEmpty) ThinkingPart(reasoning),
       ];
@@ -119,64 +124,77 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
         if (reasoning != null && reasoning.isNotEmpty) reasoning,
       ];
 
-      // Parse inline <think>...</think> if present in delta.content
+      // Parse inline <think>...</think> only when the server does not already
+      // separate reasoning into delta.reasoningContent. If serverSentReasoning
+      // is true, any <think> in delta.content is literal user-facing text.
       if (content != null && content.isNotEmpty) {
-        tagBuffer.write(content);
-        var currentText = tagBuffer.toString();
-        tagBuffer.clear();
+        if (serverSentReasoning) {
+          parts.add(TextPart(content));
+        } else {
+          tagBuffer.write(content);
+          var currentText = tagBuffer.toString();
+          tagBuffer.clear();
 
-        while (currentText.isNotEmpty) {
-          if (!inThinkTag) {
-            final thinkStart = currentText.indexOf('<think>');
-            if (thinkStart != -1) {
-              if (thinkStart > 0) {
-                final before = currentText.substring(0, thinkStart);
-                parts.add(TextPart(before));
-              }
-              inThinkTag = true;
-              currentText = currentText.substring(thinkStart + '<think>'.length);
-            } else {
-              // Check if trailing chars form a prefix of '<think>'
-              final potentialPrefix = _findPotentialTagPrefix(currentText, '<think>');
-              if (potentialPrefix.isNotEmpty) {
-                final safeLength = currentText.length - potentialPrefix.length;
-                if (safeLength > 0) {
-                  parts.add(TextPart(currentText.substring(0, safeLength)));
+          while (currentText.isNotEmpty) {
+            if (!inThinkTag) {
+              final thinkStart = currentText.indexOf('<think>');
+              if (thinkStart != -1) {
+                if (thinkStart > 0) {
+                  final before = currentText.substring(0, thinkStart);
+                  parts.add(TextPart(before));
                 }
-                tagBuffer.write(potentialPrefix);
-                currentText = '';
+                inThinkTag = true;
+                currentText = currentText.substring(thinkStart + '<think>'.length);
               } else {
-                parts.add(TextPart(currentText));
-                currentText = '';
+                // Check if trailing chars form a prefix of '<think>'
+                final potentialPrefix = _findPotentialTagPrefix(currentText, '<think>');
+                if (potentialPrefix.isNotEmpty) {
+                  final safeLength = currentText.length - potentialPrefix.length;
+                  if (safeLength > 0) {
+                    parts.add(TextPart(currentText.substring(0, safeLength)));
+                  }
+                  tagBuffer.write(potentialPrefix);
+                  currentText = '';
+                } else {
+                  parts.add(TextPart(currentText));
+                  currentText = '';
+                }
               }
-            }
-          } else {
-            // Currently inside <think>
-            final thinkEnd = currentText.indexOf('</think>');
-            if (thinkEnd != -1) {
-              if (thinkEnd > 0) {
-                final thinkText = currentText.substring(0, thinkEnd);
-                parts.add(ThinkingPart(thinkText));
-                thinkingDeltas.add(thinkText);
-              }
-              inThinkTag = false;
-              currentText = currentText.substring(thinkEnd + '</think>'.length);
             } else {
-              // Check if trailing chars form a prefix of '</think>'
-              final potentialPrefix = _findPotentialTagPrefix(currentText, '</think>');
-              if (potentialPrefix.isNotEmpty) {
-                final safeLength = currentText.length - potentialPrefix.length;
-                if (safeLength > 0) {
-                  final thinkText = currentText.substring(0, safeLength);
+              // Currently inside <think>
+              final thinkEnd = currentText.indexOf('</think>');
+              if (thinkEnd != -1) {
+                if (thinkEnd > 0) {
+                  final thinkText = currentText.substring(0, thinkEnd);
                   parts.add(ThinkingPart(thinkText));
                   thinkingDeltas.add(thinkText);
                 }
-                tagBuffer.write(potentialPrefix);
-                currentText = '';
+                inThinkTag = false;
+                var after = currentText.substring(thinkEnd + '</think>'.length);
+                // Strip a single leading newline if present immediately after </think>
+                if (after.startsWith('\r\n')) {
+                  after = after.substring(2);
+                } else if (after.startsWith('\n')) {
+                  after = after.substring(1);
+                }
+                currentText = after;
               } else {
-                parts.add(ThinkingPart(currentText));
-                thinkingDeltas.add(currentText);
-                currentText = '';
+                // Check if trailing chars form a prefix of '</think>'
+                final potentialPrefix = _findPotentialTagPrefix(currentText, '</think>');
+                if (potentialPrefix.isNotEmpty) {
+                  final safeLength = currentText.length - potentialPrefix.length;
+                  if (safeLength > 0) {
+                    final thinkText = currentText.substring(0, safeLength);
+                    parts.add(ThinkingPart(thinkText));
+                    thinkingDeltas.add(thinkText);
+                  }
+                  tagBuffer.write(potentialPrefix);
+                  currentText = '';
+                } else {
+                  parts.add(ThinkingPart(currentText));
+                  thinkingDeltas.add(currentText);
+                  currentText = '';
+                }
               }
             }
           }
