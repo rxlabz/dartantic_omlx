@@ -166,6 +166,50 @@ void main() {
       final schemaMap = req.responseFormat?.jsonSchema;
       expect(schemaMap?['name'], 'output_schema');
       expect(schemaMap?['strict'], true);
+      final rawSchema = schemaMap?['schema'] as Map<String, dynamic>;
+      expect(rawSchema['additionalProperties'], false);
+      expect(rawSchema['required'], contains('fruits'));
+    });
+
+    test('prepareSchemaForOmlx recursively adds additionalProperties: false and ensures properties', () {
+      final inputSchema = {
+        'type': 'object',
+        'format': 'date-time', // should be stripped
+        'properties': {
+          'user': {
+            'type': 'object',
+            'properties': {
+              'age': {'type': 'integer'},
+            },
+          },
+          'tags': {
+            'type': 'array',
+            'items': {
+              'type': 'object',
+            },
+          },
+          'nullableField': {
+            'type': ['string', 'null'],
+          },
+        },
+      };
+
+      final normalized = prepareSchemaForOmlx(inputSchema, strict: true);
+
+      expect(normalized.containsKey('format'), isFalse);
+      expect(normalized['additionalProperties'], false);
+      expect(normalized['required'], containsAll(['user', 'tags', 'nullableField']));
+
+      final userObj = (normalized['properties'] as Map<String, dynamic>)['user'] as Map<String, dynamic>;
+      expect(userObj['additionalProperties'], false);
+      expect(userObj['required'], ['age']);
+
+      final tagsItems = ((normalized['properties'] as Map<String, dynamic>)['tags'] as Map<String, dynamic>)['items'] as Map<String, dynamic>;
+      expect(tagsItems['additionalProperties'], false);
+      expect(tagsItems['properties'], isA<Map>());
+
+      final nullableField = (normalized['properties'] as Map<String, dynamic>)['nullableField'] as Map<String, dynamic>;
+      expect(nullableField['type'], 'string');
     });
 
     test('OmlxToolCallAccumulator merges split delta chunks', () {

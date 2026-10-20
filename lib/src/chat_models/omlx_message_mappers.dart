@@ -41,7 +41,10 @@ o.ChatCompletionRequest buildChatCompletionRequest(
         ? o.ResponseFormat.jsonSchema(
             name: 'output_schema',
             description: 'Generated response following the provided schema',
-            schema: Map<String, dynamic>.from(outputSchema.value),
+            schema: prepareSchemaForOmlx(
+              Map<String, dynamic>.from(outputSchema.value),
+              strict: true,
+            ),
             strict: true,
           )
         : options.responseFormat,
@@ -58,19 +61,103 @@ extension OmlxToolListMapper on List<Tool> {
     (tool) => o.Tool.function(
       name: tool.name,
       description: tool.description,
-      parameters: _ensureObjectSchema(
+      parameters: prepareSchemaForOmlx(
         Map<String, dynamic>.from(tool.inputSchema.value),
+        strict: false,
       ),
     ),
   ).toList(growable: false);
 }
 
-/// OpenAI-compatible servers expect object schemas to declare `properties`.
-Map<String, dynamic> _ensureObjectSchema(Map<String, dynamic> schema) {
-  if (schema['type'] == 'object' && schema['properties'] == null) {
-    return {...schema, 'properties': <String, dynamic>{}};
+/// Recursively prepares and normalizes a JSON Schema for oMLX (OpenAI-compatible)
+/// tool parameters and structured output definitions.
+///
+/// Ensures:
+/// - Nested objects always have a `properties` map.
+/// - When [strict] is `true`: `additionalProperties: false` is added to all
+///   object nodes, and all properties are required.
+/// - Incompatible nullable type arrays (e.g. `['string', 'null']`) are flattened.
+/// - Unsupported format constraints are removed.
+Map<String, dynamic> prepareSchemaForOmlx(
+  Map<String, dynamic> schema, {
+  bool strict = false,
+}) {
+  final result = Map<String, dynamic>.from(schema);
+
+  // Flatten nullable types (e.g. ['string', 'null'] -> 'string')
+  if (result['type'] is List) {
+    final types = result['type'] as List;
+    final nonNullTypes = types.where((t) => t != 'null').toList();
+    if (nonNullTypes.length == 1) {
+      result['type'] = nonNullTypes.first;
+    }
   }
-  return schema;
+
+  // Remove format field if present
+  result.remove('format');
+
+  // If this is an object, ensure properties map, additionalProperties, and required
+  if (result['type'] == 'object') {
+    if (strict) {
+      result['additionalProperties'] = false;
+    }
+
+    final properties = result['properties'] as Map<String, dynamic>?;
+    if (properties != null && properties.isNotEmpty) {
+      final processedProperties = <String, dynamic>{};
+      for (final entry in properties.entries) {
+        if (entry.value is Map) {
+          processedProperties[entry.key] = prepareSchemaForOmlx(
+            Map<String, dynamic>.from(entry.value as Map),
+            strict: strict,
+          );
+        } else {
+          processedProperties[entry.key] = entry.value;
+        }
+      }
+      result['properties'] = processedProperties;
+
+      if (strict) {
+        result['required'] = properties.keys.toList();
+      }
+    } else {
+      result['properties'] = <String, dynamic>{};
+      if (strict) {
+        result['required'] = <String>[];
+      }
+    }
+  }
+
+  // Process array items
+  if (result['type'] == 'array') {
+    final items = result['items'];
+    if (items is Map) {
+      result['items'] = prepareSchemaForOmlx(
+        Map<String, dynamic>.from(items),
+        strict: strict,
+      );
+    }
+  }
+
+  // Process definitions/$defs if present
+  final definitions = result[r'$defs'] ?? result['definitions'];
+  final defKey = result.containsKey(r'$defs') ? r'$defs' : 'definitions';
+  if (definitions is Map) {
+    final processedDefs = <String, dynamic>{};
+    for (final entry in definitions.entries) {
+      if (entry.value is Map) {
+        processedDefs[entry.key as String] = prepareSchemaForOmlx(
+          Map<String, dynamic>.from(entry.value as Map),
+          strict: strict,
+        );
+      } else {
+        processedDefs[entry.key as String] = entry.value;
+      }
+    }
+    result[defKey] = processedDefs;
+  }
+
+  return result;
 }
 
 /// Converts dartantic [ChatMessage]s to oMLX chat messages.
