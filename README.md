@@ -1,6 +1,6 @@
 # dartantic_omlx
 
-A [Dartantic AI](https://github.com/csells/dartantic_ai) provider package for **[oMLX](https://github.com/jundot/omlx)** (macOS Apple Silicon LLM inference server with continuous batching and SSD prefix caching), built on top of [`domlx`](https://github.com/jundot/omlx).
+A [Dartantic AI](https://github.com/csells/dartantic_ai) provider package for **[oMLX](https://github.com/jundot/omlx)** (macOS Apple Silicon LLM inference server with continuous batching and SSD prefix caching), built on top of [`domlx`](https://github.com/rxlabz/domlx).
 
 ---
 

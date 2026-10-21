@@ -1,7 +1,7 @@
 name: dartantic_omlx
 description: A dartantic_ai provider for oMLX, OpenAI-compatible local LLM inference server
   for Apple Silicon.
-version: 1.0.0
+version: 1.0.0+1
 repository: https://github.com/rxlabz/dartantic_omlx
 
 environment:
