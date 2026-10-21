@@ -84,9 +84,10 @@ class OmlxMediaGenerationModel
       );
     }
 
-    final hasAudioRequest = mimeTypes.any(
-      (m) => m == 'audio/*' || m.startsWith('audio/'),
-    );
+    final hasAudioRequest = mimeTypes.any((m) {
+      final lower = m.trim().toLowerCase();
+      return lower == 'audio/*' || lower.startsWith('audio/');
+    });
 
     if (!hasAudioRequest) {
       throw UnsupportedError(

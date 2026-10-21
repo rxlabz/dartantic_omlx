@@ -86,6 +86,12 @@ void main() {
       );
       expect(chat, isA<OmlxChatModel>());
       expect((chat as OmlxChatModel).enableThinking, isTrue);
+      expect(chat.temperature, 0.7);
+
+      final chatWithOptionsTemp = provider.createChatModel(
+        options: const OmlxChatOptions(temperature: 0.6),
+      );
+      expect(chatWithOptionsTemp.temperature, 0.6);
 
       final embeddings = provider.createEmbeddingsModel(
         options: const OmlxEmbeddingsModelOptions(dimensions: 384),

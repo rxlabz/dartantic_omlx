@@ -21,7 +21,7 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
   OmlxChatModel({
     required super.name,
     super.tools,
-    super.temperature,
+    double? temperature,
     OmlxChatOptions? defaultOptions,
     this.enableThinking = false,
     Uri? baseUrl,
@@ -40,7 +40,10 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
              defaultHeaders: headers ?? const {},
            ),
        _ownsClient = client == null,
-       super(defaultOptions: defaultOptions ?? const OmlxChatOptions()) {
+       super(
+         temperature: temperature ?? defaultOptions?.temperature,
+         defaultOptions: defaultOptions ?? const OmlxChatOptions(),
+       ) {
     _logger.info(
       'Creating oMLX chat model: $name with ${tools?.length ?? 0} tools, '
       'temp: $temperature, thinking: $enableThinking',
@@ -92,7 +95,26 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
     var inThinkTag = false;
     var hasFinishedThinkTag = false;
     var hasEmittedNonWhitespaceText = false;
+    var pendingStripThinkLeadingNewline = false;
+    var pendingPostThinkNewlines = 0;
     final tagBuffer = StringBuffer();
+
+    String stripPostThinkNewlines(String text) {
+      var s = text;
+      while (pendingPostThinkNewlines > 0 && s.isNotEmpty) {
+        if (s.startsWith('\r\n')) {
+          s = s.substring(2);
+          pendingPostThinkNewlines--;
+        } else if (s.startsWith('\n')) {
+          s = s.substring(1);
+          pendingPostThinkNewlines--;
+        } else {
+          pendingPostThinkNewlines = 0;
+          break;
+        }
+      }
+      return s;
+    }
 
     await for (final chunk in _client.chat.createStream(request)) {
       chunkCount++;
@@ -134,9 +156,19 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
         if (serverSentReasoning ||
             hasFinishedThinkTag ||
             hasEmittedNonWhitespaceText) {
-          parts.add(TextPart(content));
-          if (content.trim().isNotEmpty) {
-            hasEmittedNonWhitespaceText = true;
+          var textToEmit = content;
+          if (tagBuffer.isNotEmpty) {
+            textToEmit = '${tagBuffer.toString()}$textToEmit';
+            tagBuffer.clear();
+          }
+          if (pendingPostThinkNewlines > 0) {
+            textToEmit = stripPostThinkNewlines(textToEmit);
+          }
+          if (textToEmit.isNotEmpty) {
+            parts.add(TextPart(textToEmit));
+            if (textToEmit.trim().isNotEmpty) {
+              hasEmittedNonWhitespaceText = true;
+            }
           }
         } else {
           tagBuffer.write(content);
@@ -155,10 +187,15 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                     thinkStart + '<think>'.length,
                   );
                   // Strip a single leading newline if present immediately after <think>
+                  pendingStripThinkLeadingNewline = true;
                   if (after.startsWith('\r\n')) {
                     after = after.substring(2);
+                    pendingStripThinkLeadingNewline = false;
                   } else if (after.startsWith('\n')) {
                     after = after.substring(1);
+                    pendingStripThinkLeadingNewline = false;
+                  } else if (after.isNotEmpty) {
+                    pendingStripThinkLeadingNewline = false;
                   }
                   currentText = after;
                 } else {
@@ -178,9 +215,8 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                   if (safeLength > 0) {
                     final safeText = currentText.substring(0, safeLength);
                     if (safeText.trim().isNotEmpty) {
-                      parts.add(TextPart(safeText));
+                      parts.add(TextPart(currentText));
                       hasEmittedNonWhitespaceText = true;
-                      parts.add(TextPart(potentialPrefix));
                       currentText = '';
                       continue;
                     } else {
@@ -193,15 +229,27 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                     currentText = '';
                   }
                 } else {
-                  parts.add(TextPart(currentText));
-                  if (currentText.trim().isNotEmpty) {
+                  if (currentText.trim().isEmpty) {
+                    tagBuffer.write(currentText);
+                    currentText = '';
+                  } else {
+                    parts.add(TextPart(currentText));
                     hasEmittedNonWhitespaceText = true;
+                    currentText = '';
                   }
-                  currentText = '';
                 }
               }
             } else {
               // Currently inside <think>
+              if (pendingStripThinkLeadingNewline && currentText.isNotEmpty) {
+                if (currentText.startsWith('\r\n')) {
+                  currentText = currentText.substring(2);
+                } else if (currentText.startsWith('\n')) {
+                  currentText = currentText.substring(1);
+                }
+                pendingStripThinkLeadingNewline = false;
+              }
+
               final thinkEnd = currentText.indexOf('</think>');
               if (thinkEnd != -1) {
                 if (thinkEnd > 0) {
@@ -219,16 +267,8 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                 inThinkTag = false;
                 hasFinishedThinkTag = true;
                 var after = currentText.substring(thinkEnd + '</think>'.length);
-                // Strip leading newlines if present immediately after </think>
-                if (after.startsWith('\r\n\r\n')) {
-                  after = after.substring(4);
-                } else if (after.startsWith('\n\n')) {
-                  after = after.substring(2);
-                } else if (after.startsWith('\r\n')) {
-                  after = after.substring(2);
-                } else if (after.startsWith('\n')) {
-                  after = after.substring(1);
-                }
+                pendingPostThinkNewlines = 2;
+                after = stripPostThinkNewlines(after);
                 currentText = after;
               } else {
                 // Check if trailing chars form a prefix of '</think>'
@@ -236,15 +276,24 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                   currentText,
                   '</think>',
                 );
-                if (potentialPrefix.isNotEmpty) {
-                  final safeLength =
-                      currentText.length - potentialPrefix.length;
+                final textBeforePrefix = currentText.substring(
+                  0,
+                  currentText.length - potentialPrefix.length,
+                );
+                final trailingNewlineLen = textBeforePrefix.endsWith('\r\n')
+                    ? 2
+                    : (textBeforePrefix.endsWith('\n') ? 1 : 0);
+                final holdLength =
+                    potentialPrefix.length + trailingNewlineLen;
+
+                if (holdLength > 0) {
+                  final safeLength = currentText.length - holdLength;
                   if (safeLength > 0) {
                     final thinkText = currentText.substring(0, safeLength);
                     parts.add(ThinkingPart(thinkText));
                     thinkingDeltas.add(thinkText);
                   }
-                  tagBuffer.write(potentialPrefix);
+                  tagBuffer.write(currentText.substring(safeLength));
                   currentText = '';
                 } else {
                   parts.add(ThinkingPart(currentText));

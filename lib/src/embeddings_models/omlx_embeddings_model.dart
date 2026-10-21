@@ -14,8 +14,8 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
   /// Creates an [OmlxEmbeddingsModel].
   OmlxEmbeddingsModel({
     required super.name,
-    super.dimensions,
-    super.batchSize = 512,
+    int? dimensions,
+    int? batchSize,
     OmlxEmbeddingsModelOptions? options,
     Uri? baseUrl,
     String? apiKey,
@@ -34,14 +34,16 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
            ),
        _ownsClient = client == null,
        super(
+         dimensions: dimensions ?? options?.dimensions,
+         batchSize: batchSize ?? options?.batchSize ?? 512,
          defaultOptions: OmlxEmbeddingsModelOptions(
-           dimensions: dimensions,
-           batchSize: batchSize,
+           dimensions: dimensions ?? options?.dimensions,
+           batchSize: batchSize ?? options?.batchSize ?? 512,
          ).mergeWith(options),
        ) {
     _logger.info(
       'Created oMLX embeddings model: $name '
-      '(dimensions: $dimensions, batchSize: $batchSize)',
+      '(dimensions: ${this.dimensions}, batchSize: ${this.batchSize})',
     );
   }
 

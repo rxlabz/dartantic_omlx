@@ -38,7 +38,9 @@ class OmlxProvider
     this.client,
   }) : super(
          baseUrl: OmlxUtils.resolveBaseUrl(baseUrl),
-         apiKey: apiKey ?? OmlxUtils.tryGetEnv(apiKeyName ?? defaultApiKeyName),
+         apiKey: (apiKey != null && apiKey.isNotEmpty)
+             ? apiKey
+             : OmlxUtils.tryGetEnv(apiKeyName ?? defaultApiKeyName),
        );
 
   /// Default chat model for oMLX.
@@ -118,15 +120,16 @@ class OmlxProvider
     OmlxChatOptions? options,
   }) {
     final modelName = name ?? defaultModelNames[ModelKind.chat]!;
+    final effectiveTemperature = temperature ?? options?.temperature;
     _logger.info(
       'Creating oMLX chat model: $modelName with ${tools?.length ?? 0} tools, '
-      'temp: $temperature, thinking: $enableThinking',
+      'temp: $effectiveTemperature, thinking: $enableThinking',
     );
 
     return OmlxChatModel(
       name: modelName,
       tools: tools,
-      temperature: temperature,
+      temperature: effectiveTemperature,
       enableThinking: enableThinking,
       baseUrl: baseUrl ?? defaultBaseUrl,
       apiKey: apiKey,
@@ -155,7 +158,7 @@ class OmlxProvider
       timeout: timeout,
       client: client,
       dimensions: options?.dimensions,
-      batchSize: options?.batchSize ?? 512,
+      batchSize: options?.batchSize,
       options: options,
     );
   }

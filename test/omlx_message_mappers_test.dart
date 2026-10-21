@@ -41,8 +41,8 @@ void main() {
       expect(omlxMessages.length, 1);
       expect(omlxMessages.first.role, 'user');
       final content = omlxMessages.first.content;
-      expect(content, isA<List>());
-      final parts = content as List;
+      expect(content, isA<List<dynamic>>());
+      final parts = content as List<dynamic>;
       expect(parts.length, 2);
       expect(parts[0], isA<o.TextContentPart>());
       expect(parts[1], isA<o.ImageContentPart>());
@@ -213,6 +213,34 @@ void main() {
       expect(req2.extra['other_param'], 'test');
     });
 
+    test('buildChatCompletionRequest respects temperature precedence', () {
+      // 1. When only model temperature is provided, it is used
+      final req1 = buildChatCompletionRequest(
+        [ChatMessage.user('Hi')],
+        modelName: 'test-model',
+        options: const OmlxChatOptions(),
+        temperature: 0.7,
+      );
+      expect(req1.temperature, 0.7);
+
+      // 2. When options.temperature is provided, it overrides model temperature
+      final req2 = buildChatCompletionRequest(
+        [ChatMessage.user('Hi')],
+        modelName: 'test-model',
+        options: const OmlxChatOptions(temperature: 0.2),
+        temperature: 0.7,
+      );
+      expect(req2.temperature, 0.2);
+
+      // 3. When neither is provided, temperature is null
+      final req3 = buildChatCompletionRequest(
+        [ChatMessage.user('Hi')],
+        modelName: 'test-model',
+        options: const OmlxChatOptions(),
+      );
+      expect(req3.temperature, isNull);
+    });
+
     test('prepareSchemaForOmlx recursively adds additionalProperties: false and ensures properties', () {
       final inputSchema = {
         'type': 'object',
@@ -248,7 +276,7 @@ void main() {
 
       final tagsItems = ((normalized['properties'] as Map<String, dynamic>)['tags'] as Map<String, dynamic>)['items'] as Map<String, dynamic>;
       expect(tagsItems['additionalProperties'], false);
-      expect(tagsItems['properties'], isA<Map>());
+      expect(tagsItems['properties'], isA<Map<dynamic, dynamic>>());
 
       final nullableField = (normalized['properties'] as Map<String, dynamic>)['nullableField'] as Map<String, dynamic>;
       expect(nullableField['type'], containsAll(['string', 'null']));
@@ -287,21 +315,21 @@ void main() {
 
       final normalized = prepareSchemaForOmlx(inputSchema, strict: true);
 
-      final anyOfList = normalized['anyOf'] as List;
+      final anyOfList = normalized['anyOf'] as List<dynamic>;
       expect(anyOfList.length, 2);
-      expect((anyOfList[0] as Map)['additionalProperties'], false);
-      expect((anyOfList[0] as Map)['required'], ['kind']);
-      expect((anyOfList[1] as Map)['additionalProperties'], false);
-      expect((anyOfList[1] as Map)['properties'], isA<Map>());
+      expect((anyOfList[0] as Map<String, dynamic>)['additionalProperties'], false);
+      expect((anyOfList[0] as Map<String, dynamic>)['required'], ['kind']);
+      expect((anyOfList[1] as Map<String, dynamic>)['additionalProperties'], false);
+      expect((anyOfList[1] as Map<String, dynamic>)['properties'], isA<Map<dynamic, dynamic>>());
 
-      final oneOfList = normalized['oneOf'] as List;
-      expect((oneOfList[0] as Map)['additionalProperties'], false);
-      expect((oneOfList[0] as Map)['required'], ['val']);
+      final oneOfList = normalized['oneOf'] as List<dynamic>;
+      expect((oneOfList[0] as Map<String, dynamic>)['additionalProperties'], false);
+      expect((oneOfList[0] as Map<String, dynamic>)['required'], ['val']);
 
-      final allOfList = normalized['allOf'] as List;
-      expect((allOfList[0] as Map).containsKey('format'), isFalse);
-      expect((allOfList[0] as Map)['additionalProperties'], false);
-      expect((allOfList[0] as Map)['properties'], isA<Map>());
+      final allOfList = normalized['allOf'] as List<dynamic>;
+      expect((allOfList[0] as Map<String, dynamic>).containsKey('format'), isFalse);
+      expect((allOfList[0] as Map<String, dynamic>)['additionalProperties'], false);
+      expect((allOfList[0] as Map<String, dynamic>)['properties'], isA<Map<dynamic, dynamic>>());
     });
 
     test('OmlxToolCallAccumulator merges split delta chunks', () {
@@ -473,6 +501,60 @@ void main() {
 
       expect(text.length, 1);
       expect(text.first.text, 'Actual response');
+    });
+
+    test('chatMessageFromOmlx leaves <think> as literal text when preceded by non-whitespace text', () {
+      const omlxMsg = o.ChatMessage(
+        role: 'assistant',
+        content: 'Prefix text <think>should be literal</think> and more text',
+      );
+
+      final msg = chatMessageFromOmlx(omlxMsg);
+      expect(msg.role, ChatMessageRole.model);
+
+      final thinking = msg.parts.whereType<ThinkingPart>().toList();
+      final text = msg.parts.whereType<TextPart>().toList();
+
+      expect(thinking, isEmpty);
+      expect(text.length, 1);
+      expect(text.first.text, 'Prefix text <think>should be literal</think> and more text');
+    });
+
+    test('chatMessageFromOmlx discards leading whitespace before <think>', () {
+      const omlxMsg = o.ChatMessage(
+        role: 'assistant',
+        content: '   \n  <think>\nThought\n</think>\n\nResponse',
+      );
+
+      final msg = chatMessageFromOmlx(omlxMsg);
+      expect(msg.role, ChatMessageRole.model);
+
+      final thinking = msg.parts.whereType<ThinkingPart>().toList();
+      final text = msg.parts.whereType<TextPart>().toList();
+
+      expect(thinking.length, 1);
+      expect(thinking.first.text, 'Thought');
+      expect(text.length, 1);
+      expect(text.first.text, 'Response');
+    });
+
+    test('chatMessageFromOmlx leaves <think> as literal text when server sends reasoningContent', () {
+      const omlxMsg = o.ChatMessage(
+        role: 'assistant',
+        content: '<think>not reasoning</think> response',
+        reasoningContent: 'server reasoning',
+      );
+
+      final msg = chatMessageFromOmlx(omlxMsg);
+      expect(msg.role, ChatMessageRole.model);
+
+      final thinking = msg.parts.whereType<ThinkingPart>().toList();
+      final text = msg.parts.whereType<TextPart>().toList();
+
+      expect(thinking.length, 1);
+      expect(thinking.first.text, 'server reasoning');
+      expect(text.length, 1);
+      expect(text.first.text, '<think>not reasoning</think> response');
     });
   });
 }

@@ -49,7 +49,7 @@ o.ChatCompletionRequest buildChatCompletionRequest(
   return o.ChatCompletionRequest(
     model: modelName,
     messages: messages.toOmlxMessages(),
-    temperature: temperature ?? options.temperature,
+    temperature: options.temperature ?? temperature,
     topP: options.topP,
     topK: options.topK,
     repetitionPenalty: options.repetitionPenalty,
@@ -430,13 +430,13 @@ ChatMessage chatMessageFromOmlx(o.ChatMessage message) {
   var text = message.textContent;
 
   // If reasoningContent was not separated by the server, extract from inline <think> if present
+  // at the start of the message (ignoring optional leading whitespace).
   if ((reasoning == null || reasoning.isEmpty) &&
       text.contains('<think>') &&
       text.contains('</think>')) {
     final thinkStart = text.indexOf('<think>');
     final thinkEnd = text.indexOf('</think>');
-    if (thinkStart < thinkEnd) {
-      final before = text.substring(0, thinkStart);
+    if (thinkStart < thinkEnd && text.substring(0, thinkStart).trim().isEmpty) {
       var think = text.substring(thinkStart + '<think>'.length, thinkEnd);
       var after = text.substring(thinkEnd + '</think>'.length);
       if (think.startsWith('\r\n')) {
@@ -444,13 +444,22 @@ ChatMessage chatMessageFromOmlx(o.ChatMessage message) {
       } else if (think.startsWith('\n')) {
         think = think.substring(1);
       }
-      if (after.startsWith('\r\n')) {
+      if (think.endsWith('\r\n')) {
+        think = think.substring(0, think.length - 2);
+      } else if (think.endsWith('\n')) {
+        think = think.substring(0, think.length - 1);
+      }
+      if (after.startsWith('\r\n\r\n')) {
+        after = after.substring(4);
+      } else if (after.startsWith('\n\n')) {
+        after = after.substring(2);
+      } else if (after.startsWith('\r\n')) {
         after = after.substring(2);
       } else if (after.startsWith('\n')) {
         after = after.substring(1);
       }
-      reasoning = think.trim();
-      text = '$before$after'.trim();
+      reasoning = think;
+      text = after;
     }
   }
 

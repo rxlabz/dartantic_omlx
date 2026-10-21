@@ -220,6 +220,29 @@ void main() {
       expect(results.first.metadata['mime_type'], 'audio/wav');
     });
 
+    test('supports case-insensitive and whitespace-padded audio mimeTypes', () async {
+      final fakeBytes = Uint8List.fromList([1, 2, 3]);
+      final mock = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['response_format'], 'wav');
+        return http.Response.bytes(fakeBytes, 200, headers: {'content-type': 'audio/wav'});
+      });
+
+      final model = OmlxMediaGenerationModel(
+        name: 'kokoro',
+        httpClient: mock,
+      );
+
+      final results = await model.generateMediaStream(
+        'Hello',
+        mimeTypes: ['  AUDIO/WAV  '],
+      ).toList();
+
+      expect(results.length, 1);
+      expect(results.first.metadata['format'], 'wav');
+      expect(results.first.metadata['mime_type'], 'audio/wav');
+    });
+
     test('rejects output schemas', () {
       final model = OmlxMediaGenerationModel(name: 'kokoro');
 
