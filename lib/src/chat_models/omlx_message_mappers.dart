@@ -348,12 +348,12 @@ class OmlxToolCallAccumulator {
 
   /// Adds the tool call deltas of a single chunk.
   void addAll(List<o.ToolCall> deltas) {
-    for (var i = 0; i < deltas.length; i++) {
-      _add(deltas[i], fallbackIndex: i);
+    for (final delta in deltas) {
+      _add(delta);
     }
   }
 
-  void _add(o.ToolCall delta, {required int fallbackIndex}) {
+  void _add(o.ToolCall delta) {
     final id = delta.id;
     final name = delta.function.name;
     final args = delta.function.arguments;
@@ -381,7 +381,7 @@ class OmlxToolCallAccumulator {
     if (existing == null) {
       _calls.add(
         _PendingToolCall(
-          index: delta.index ?? fallbackIndex,
+          index: delta.index ?? _calls.length,
           id: id == null || id.isEmpty ? null : id,
           name: name,
         )..arguments.write(args),
@@ -415,10 +415,11 @@ class _PendingToolCall {
 }
 
 Map<String, Object?> _decodeArguments(String raw) {
-  if (raw.trim().isEmpty) return {};
-  final decoded = jsonDecode(raw);
-  if (decoded is Map<String, dynamic>) return decoded;
-  if (decoded == null) return {};
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed == 'null' || trimmed == '""') return {};
+  final decoded = jsonDecode(trimmed);
+  if (decoded is Map) return decoded.cast<String, Object?>();
+  if (decoded == null || decoded == 'null') return {};
   throw FormatException('Tool call arguments are not a JSON object', raw);
 }
 

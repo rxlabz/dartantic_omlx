@@ -327,6 +327,87 @@ void main() {
       expect(toolCalls.first.arguments, {'op': 'add', 'a': 1, 'b': 2});
     });
 
+    test('OmlxToolCallAccumulator handles missing index across multiple calls without collision', () {
+      final accumulator = OmlxToolCallAccumulator();
+      // Chunk 1: first call start (no index, no id)
+      accumulator.addAll([
+        const o.ToolCall(
+          function: o.FunctionCall(name: 'search', arguments: '{"q":'),
+        ),
+      ]);
+      // Chunk 2: first call continuation (no index, no id)
+      accumulator.addAll([
+        const o.ToolCall(
+          function: o.FunctionCall(arguments: '"dart"}'),
+        ),
+      ]);
+      // Chunk 3: second call start (no index, no id)
+      accumulator.addAll([
+        const o.ToolCall(
+          function: o.FunctionCall(name: 'calculator', arguments: '{"expr":'),
+        ),
+      ]);
+      // Chunk 4: second call continuation (no index, no id)
+      accumulator.addAll([
+        const o.ToolCall(
+          function: o.FunctionCall(arguments: '"2+2"}'),
+        ),
+      ]);
+
+      final toolCalls = accumulator.build();
+      expect(toolCalls.length, 2);
+      expect(toolCalls[0].toolName, 'search');
+      expect(toolCalls[0].arguments, {'q': 'dart'});
+      expect(toolCalls[1].toolName, 'calculator');
+      expect(toolCalls[1].arguments, {'expr': '2+2'});
+    });
+
+    test('OmlxToolCallAccumulator decodes empty and "null" arguments safely', () {
+      final accumulator = OmlxToolCallAccumulator();
+      accumulator.addAll([
+        const o.ToolCall(
+          id: 'call_1',
+          index: 0,
+          function: o.FunctionCall(name: 'tool_empty', arguments: ''),
+        ),
+        const o.ToolCall(
+          id: 'call_2',
+          index: 1,
+          function: o.FunctionCall(name: 'tool_null_raw', arguments: 'null'),
+        ),
+        const o.ToolCall(
+          id: 'call_3',
+          index: 2,
+          function: o.FunctionCall(name: 'tool_null_quoted', arguments: '"null"'),
+        ),
+        const o.ToolCall(
+          id: 'call_4',
+          index: 3,
+          function: o.FunctionCall(name: 'tool_whitespace', arguments: '   '),
+        ),
+      ]);
+
+      final toolCalls = accumulator.build();
+      expect(toolCalls.length, 4);
+      expect(toolCalls[0].arguments, isEmpty);
+      expect(toolCalls[1].arguments, isEmpty);
+      expect(toolCalls[2].arguments, isEmpty);
+      expect(toolCalls[3].arguments, isEmpty);
+    });
+
+    test('OmlxToolCallAccumulator throws FormatException on invalid non-object arguments', () {
+      final accumulator = OmlxToolCallAccumulator();
+      accumulator.addAll([
+        const o.ToolCall(
+          id: 'call_bad',
+          index: 0,
+          function: o.FunctionCall(name: 'bad_tool', arguments: '123'),
+        ),
+      ]);
+
+      expect(() => accumulator.build(), throwsFormatException);
+    });
+
     test('toOmlxMessages omits reasoningContent on past completed turns but keeps on recent/tool-calling messages', () {
       final messages = [
         ChatMessage.user('First turn'),
