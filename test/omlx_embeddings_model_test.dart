@@ -170,6 +170,20 @@ void main() {
       expect(result.output[1], [0.2, 0.2]);
     });
 
+    test('retains constructor dimensions and batchSize when options does not specify them', () {
+      final model = OmlxEmbeddingsModel(
+        name: 'bge-micro',
+        dimensions: 384,
+        batchSize: 256,
+        options: const OmlxEmbeddingsModelOptions(encodingFormat: 'base64'),
+      );
+      expect(model.dimensions, 384);
+      expect(model.batchSize, 256);
+      expect(model.defaultOptions.dimensions, 384);
+      expect(model.defaultOptions.batchSize, 256);
+      expect(model.defaultOptions.encodingFormat, 'base64');
+    });
+
     test('embedDocuments returns empty for empty input', () async {
       final model = OmlxEmbeddingsModel(name: 'bge-micro');
       final result = await model.embedDocuments([]);

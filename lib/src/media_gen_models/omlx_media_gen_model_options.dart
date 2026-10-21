@@ -6,9 +6,9 @@ import 'package:meta/meta.dart';
 class OmlxMediaGenerationModelOptions extends MediaGenerationModelOptions {
   /// Creates a new [OmlxMediaGenerationModelOptions] instance.
   const OmlxMediaGenerationModelOptions({
-    this.voice = 'af_heart',
+    this.voice,
     this.responseFormat,
-    this.speed = 1.0,
+    this.speed,
   });
 
   /// Voice to use for synthesis (e.g. `'af_heart'`, `'alloy'`, `'am_adam'`).

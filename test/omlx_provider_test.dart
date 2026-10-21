@@ -52,6 +52,8 @@ void main() {
         options: const OmlxEmbeddingsModelOptions(dimensions: 384),
       );
       expect(embeddings, isA<OmlxEmbeddingsModel>());
+      expect((embeddings as OmlxEmbeddingsModel).batchSize, 512);
+      expect(embeddings.dimensions, 384);
 
       final media = provider.createMediaModel(
         options: const OmlxMediaGenerationModelOptions(voice: 'am_adam'),

@@ -34,12 +34,10 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
            ),
        _ownsClient = client == null,
        super(
-         defaultOptions:
-             options ??
-             OmlxEmbeddingsModelOptions(
-               dimensions: dimensions,
-               batchSize: batchSize,
-             ),
+         defaultOptions: OmlxEmbeddingsModelOptions(
+           dimensions: dimensions,
+           batchSize: batchSize,
+         ).mergeWith(options),
        ) {
     _logger.info(
       'Created oMLX embeddings model: $name '

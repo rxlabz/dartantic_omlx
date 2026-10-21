@@ -240,6 +240,108 @@ void main() {
       expect(thinkingDeltas.join(), 'Internal thought process');
     });
 
+    test('strips leading newline after <think> and discards whitespace before <think>', () async {
+      final sseLines = [
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-newline',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'qwen',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {'role': 'assistant', 'content': '\n<think>\nThought line 1\nThought line 2</think>\n\nAnswer line.'},
+              'finish_reason': 'stop',
+            }
+          ],
+        })}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final mock = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          Stream.fromIterable(sseLines.map(utf8.encode)),
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        );
+      });
+
+      final model = OmlxChatModel(
+        name: 'qwen',
+        enableThinking: true,
+        httpClient: mock,
+      );
+
+      final results = await model.sendStream([
+        ChatMessage.user('Question'),
+      ]).toList();
+
+      final thinkingParts = results
+          .expand((r) => r.output.parts)
+          .whereType<ThinkingPart>()
+          .toList();
+      final textParts = results
+          .expand((r) => r.output.parts)
+          .whereType<TextPart>()
+          .toList();
+
+      expect(thinkingParts.length, 1);
+      expect(thinkingParts.first.text, 'Thought line 1\nThought line 2');
+
+      expect(textParts.length, 1);
+      expect(textParts.first.text, 'Answer line.');
+    });
+
+    test('treats <think> mid-response after user text as literal text even without server reasoning_content', () async {
+      final sseLines = [
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-mid',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'qwen',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {'role': 'assistant', 'content': 'Here is an XML example:\n```xml\n<think>value</think>\n```'},
+              'finish_reason': 'stop',
+            }
+          ],
+        })}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final mock = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          Stream.fromIterable(sseLines.map(utf8.encode)),
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        );
+      });
+
+      final model = OmlxChatModel(
+        name: 'qwen',
+        enableThinking: false,
+        httpClient: mock,
+      );
+
+      final results = await model.sendStream([
+        ChatMessage.user('Question'),
+      ]).toList();
+
+      final thinkingParts = results
+          .expand((r) => r.output.parts)
+          .whereType<ThinkingPart>()
+          .toList();
+      final textParts = results
+          .expand((r) => r.output.parts)
+          .whereType<TextPart>()
+          .toList();
+
+      expect(thinkingParts, isEmpty);
+      expect(textParts.length, 1);
+      expect(textParts.first.text, contains('<think>value</think>'));
+    });
+
     test('treats <think> in delta.content as literal text when server sends reasoning_content', () async {
       final sseLines = [
         'data: ${jsonEncode({

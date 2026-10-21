@@ -103,8 +103,8 @@ Map<String, dynamic> prepareSchemaForOmlx(
 }) {
   final result = Map<String, dynamic>.from(schema);
 
-  // Flatten nullable types (e.g. ['string', 'null'] -> 'string')
-  if (result['type'] is List) {
+  // Flatten nullable types (e.g. ['string', 'null'] -> 'string') only for non-strict tool schemas
+  if (!strict && result['type'] is List) {
     final types = result['type'] as List;
     final nonNullTypes = types.where((t) => t != 'null').toList();
     if (nonNullTypes.length == 1) {
@@ -116,18 +116,45 @@ Map<String, dynamic> prepareSchemaForOmlx(
   result.remove('format');
 
   // If this is an object, ensure properties map, additionalProperties, and required
-  if (result['type'] == 'object') {
+  final typeVal = result['type'];
+  final isObject = typeVal == 'object' ||
+      (typeVal is List && typeVal.contains('object')) ||
+      (typeVal == null && result.containsKey('properties'));
+
+  if (isObject) {
     if (strict) {
       result['additionalProperties'] = false;
     }
 
     final properties = result['properties'] as Map<String, dynamic>?;
+    final originalRequired =
+        (result['required'] as List?)?.cast<String>().toSet() ?? <String>{};
+
     if (properties != null && properties.isNotEmpty) {
       final processedProperties = <String, dynamic>{};
       for (final entry in properties.entries) {
         if (entry.value is Map) {
+          var propSchema = Map<String, dynamic>.from(entry.value as Map);
+          if (strict && !originalRequired.contains(entry.key)) {
+            // In strict mode, properties not originally in required must allow null
+            if (propSchema['type'] is String && propSchema['type'] != 'null') {
+              propSchema['type'] = [propSchema['type'], 'null'];
+            } else if (propSchema['type'] is List) {
+              final types = (propSchema['type'] as List).toList();
+              if (!types.contains('null')) {
+                types.add('null');
+                propSchema['type'] = types;
+              }
+            } else if (propSchema['anyOf'] != null) {
+              final anyOf = (propSchema['anyOf'] as List).toList();
+              if (!anyOf.any((item) => item is Map && item['type'] == 'null')) {
+                anyOf.add({'type': 'null'});
+                propSchema['anyOf'] = anyOf;
+              }
+            }
+          }
           processedProperties[entry.key] = prepareSchemaForOmlx(
-            Map<String, dynamic>.from(entry.value as Map),
+            propSchema,
             strict: strict,
           );
         } else {
@@ -138,6 +165,8 @@ Map<String, dynamic> prepareSchemaForOmlx(
 
       if (strict) {
         result['required'] = properties.keys.toList();
+      } else if (result.containsKey('required')) {
+        result['required'] = originalRequired.toList();
       }
     } else {
       result['properties'] = <String, dynamic>{};
@@ -148,7 +177,9 @@ Map<String, dynamic> prepareSchemaForOmlx(
   }
 
   // Process array items
-  if (result['type'] == 'array') {
+  final isArray = typeVal == 'array' ||
+      (typeVal is List && typeVal.contains('array'));
+  if (isArray) {
     final items = result['items'];
     if (items is Map) {
       result['items'] = prepareSchemaForOmlx(
@@ -199,19 +230,25 @@ Map<String, dynamic> prepareSchemaForOmlx(
 extension OmlxMessageListMapper on List<ChatMessage> {
   /// Converts this conversation into oMLX [o.ChatMessage]s.
   ///
-  /// Tool results are expanded into one `tool` role message per result, and
-  /// [ThinkingPart]s on model messages are preserved as `reasoningContent`.
+  /// Tool results are expanded into one `tool` role message per result.
+  /// [ThinkingPart]s are preserved as `reasoningContent` on messages that
+  /// contain tool calls or the most recent model message, but omitted on
+  /// past completed turns to prevent prompt bloat and template errors.
   List<o.ChatMessage> toOmlxMessages() {
     _logger.fine('Converting $length messages to oMLX format');
     final result = <o.ChatMessage>[];
-    for (final message in this) {
+    for (var i = 0; i < length; i++) {
+      final message = this[i];
       switch (message.role) {
         case ChatMessageRole.system:
           result.add(o.ChatMessage.system(message.text));
         case ChatMessageRole.user:
           result.addAll(_mapUserMessage(message));
         case ChatMessageRole.model:
-          result.add(_mapModelMessage(message));
+          final isRecentOrHasTools = message.hasToolCalls || i == length - 1;
+          result.add(
+            _mapModelMessage(message, includeReasoning: isRecentOrHasTools),
+          );
       }
     }
     return result;
@@ -268,10 +305,13 @@ List<o.ChatMessage> _mapUserMessage(ChatMessage message) {
   return messages;
 }
 
-o.ChatMessage _mapModelMessage(ChatMessage message) {
+o.ChatMessage _mapModelMessage(
+  ChatMessage message, {
+  bool includeReasoning = true,
+}) {
   final text = message.text;
   final thinkingParts = message.parts.whereType<ThinkingPart>().toList();
-  final reasoningContent = thinkingParts.isNotEmpty
+  final reasoningContent = (includeReasoning && thinkingParts.isNotEmpty)
       ? thinkingParts.map((p) => p.text).join()
       : null;
 
@@ -385,11 +425,37 @@ Map<String, Object?> _decodeArguments(String raw) {
 /// Converts a non-streamed oMLX assistant message into a dartantic message.
 ChatMessage chatMessageFromOmlx(o.ChatMessage message) {
   final parts = <Part>[];
-  final reasoning = message.reasoningContent;
+  var reasoning = message.reasoningContent;
+  var text = message.textContent;
+
+  // If reasoningContent was not separated by the server, extract from inline <think> if present
+  if ((reasoning == null || reasoning.isEmpty) &&
+      text.contains('<think>') &&
+      text.contains('</think>')) {
+    final thinkStart = text.indexOf('<think>');
+    final thinkEnd = text.indexOf('</think>');
+    if (thinkStart < thinkEnd) {
+      final before = text.substring(0, thinkStart);
+      var think = text.substring(thinkStart + '<think>'.length, thinkEnd);
+      var after = text.substring(thinkEnd + '</think>'.length);
+      if (think.startsWith('\r\n')) {
+        think = think.substring(2);
+      } else if (think.startsWith('\n')) {
+        think = think.substring(1);
+      }
+      if (after.startsWith('\r\n')) {
+        after = after.substring(2);
+      } else if (after.startsWith('\n')) {
+        after = after.substring(1);
+      }
+      reasoning = think.trim();
+      text = '$before$after'.trim();
+    }
+  }
+
   if (reasoning != null && reasoning.isNotEmpty) {
     parts.add(ThinkingPart(reasoning));
   }
-  final text = message.textContent;
   if (text.isNotEmpty) parts.add(TextPart(text));
   final toolCalls = message.toolCalls;
   if (toolCalls != null && toolCalls.isNotEmpty) {

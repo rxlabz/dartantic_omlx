@@ -60,6 +60,14 @@ class OmlxMediaGenerationModel
       );
     }
 
+    if (prompt.trim().isEmpty) {
+      throw ArgumentError.value(
+        prompt,
+        'prompt',
+        'TTS input prompt cannot be empty.',
+      );
+    }
+
     final hasAudioRequest = mimeTypes.any(
       (m) => m == 'audio/*' || m.startsWith('audio/'),
     );
@@ -78,6 +86,7 @@ class OmlxMediaGenerationModel
     );
 
     final voice = mergedOptions.voice ?? 'af_heart';
+    final speed = mergedOptions.speed ?? 1.0;
 
     _logger.info(
       'Generating speech with oMLX model "$name" '
@@ -89,7 +98,7 @@ class OmlxMediaGenerationModel
       input: prompt,
       voice: voice,
       responseFormat: formatExtension,
-      speed: mergedOptions.speed,
+      speed: speed,
     );
 
     final bytes = await _client.audio.speech(request);

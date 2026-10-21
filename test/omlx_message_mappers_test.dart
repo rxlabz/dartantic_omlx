@@ -251,7 +251,12 @@ void main() {
       expect(tagsItems['properties'], isA<Map>());
 
       final nullableField = (normalized['properties'] as Map<String, dynamic>)['nullableField'] as Map<String, dynamic>;
-      expect(nullableField['type'], 'string');
+      expect(nullableField['type'], containsAll(['string', 'null']));
+
+      // In non-strict mode (tool parameters), nullable types are flattened to string
+      final toolSchema = prepareSchemaForOmlx(inputSchema, strict: false);
+      final toolNullableField = (toolSchema['properties'] as Map<String, dynamic>)['nullableField'] as Map<String, dynamic>;
+      expect(toolNullableField['type'], 'string');
     });
 
     test('prepareSchemaForOmlx recursively normalizes anyOf, oneOf, and allOf', () {
@@ -320,6 +325,73 @@ void main() {
       expect(toolCalls.first.callId, 'call_abc');
       expect(toolCalls.first.toolName, 'calculator');
       expect(toolCalls.first.arguments, {'op': 'add', 'a': 1, 'b': 2});
+    });
+
+    test('toOmlxMessages omits reasoningContent on past completed turns but keeps on recent/tool-calling messages', () {
+      final messages = [
+        ChatMessage.user('First turn'),
+        ChatMessage(
+          role: ChatMessageRole.model,
+          parts: const [
+            ThinkingPart('Historical thinking that should not be re-sent'),
+            TextPart('First answer'),
+          ],
+        ),
+        ChatMessage.user('Second turn'),
+        ChatMessage(
+          role: ChatMessageRole.model,
+          parts: const [
+            ThinkingPart('Thinking for tool call'),
+            ToolPart.call(callId: 'call_1', toolName: 'test', arguments: {}),
+          ],
+        ),
+        ChatMessage(
+          role: ChatMessageRole.user,
+          parts: const [
+            ToolPart.result(callId: 'call_1', toolName: 'test', result: 'ok'),
+          ],
+        ),
+        ChatMessage(
+          role: ChatMessageRole.model,
+          parts: const [
+            ThinkingPart('Most recent thinking'),
+            TextPart('Final answer'),
+          ],
+        ),
+      ];
+
+      final omlxMessages = messages.toOmlxMessages();
+
+      // First model message (index 1 in omlxMessages): completed turn, reasoning omitted
+      expect(omlxMessages[1].reasoningContent, isNull);
+      expect(omlxMessages[1].textContent, 'First answer');
+
+      // Second model message (index 3 in omlxMessages): has tool calls, reasoning preserved
+      expect(omlxMessages[3].reasoningContent, 'Thinking for tool call');
+      expect(omlxMessages[3].toolCalls?.length, 1);
+
+      // Third model message (index 5 in omlxMessages): most recent message, reasoning preserved
+      expect(omlxMessages[5].reasoningContent, 'Most recent thinking');
+      expect(omlxMessages[5].textContent, 'Final answer');
+    });
+
+    test('chatMessageFromOmlx parses inline <think> tag when reasoningContent is null', () {
+      const omlxMsg = o.ChatMessage(
+        role: 'assistant',
+        content: '<think>\nInline thought\n</think>\nActual response',
+      );
+
+      final msg = chatMessageFromOmlx(omlxMsg);
+      expect(msg.role, ChatMessageRole.model);
+
+      final thinking = msg.parts.whereType<ThinkingPart>().toList();
+      final text = msg.parts.whereType<TextPart>().toList();
+
+      expect(thinking.length, 1);
+      expect(thinking.first.text, 'Inline thought');
+
+      expect(text.length, 1);
+      expect(text.first.text, 'Actual response');
     });
   });
 }

@@ -113,6 +113,52 @@ void main() {
       expect(result.metadata['mime_type'], 'audio/flac');
     });
 
+    test('options does not overwrite defaultOptions voice and speed when not specified', () async {
+      final fakeBytes = Uint8List.fromList([1, 2, 3]);
+      final mock = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['voice'], 'am_adam');
+        expect(body['speed'], 1.5);
+        expect(body['response_format'], 'wav');
+
+        return http.Response.bytes(
+          fakeBytes,
+          200,
+          headers: {'content-type': 'audio/wav'},
+        );
+      });
+
+      final model = OmlxMediaGenerationModel(
+        name: 'kokoro',
+        defaultOptions: const OmlxMediaGenerationModelOptions(
+          voice: 'am_adam',
+          speed: 1.5,
+        ),
+        httpClient: mock,
+      );
+
+      final results = await model.generateMediaStream(
+        'Speech with custom voice and speed',
+        mimeTypes: ['audio/wav'],
+        options: const OmlxMediaGenerationModelOptions(responseFormat: 'wav'),
+      ).toList();
+
+      expect(results.length, 1);
+      expect(results.first.metadata['voice'], 'am_adam');
+    });
+
+    test('rejects empty prompt', () {
+      final model = OmlxMediaGenerationModel(name: 'kokoro');
+
+      expect(
+        () => model.generateMediaStream(
+          '   ',
+          mimeTypes: ['audio/mp3'],
+        ).toList(),
+        throwsArgumentError,
+      );
+    });
+
     test('rejects non-audio mime type requests', () {
       final model = OmlxMediaGenerationModel(name: 'kokoro');
 

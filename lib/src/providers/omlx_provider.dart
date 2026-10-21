@@ -149,7 +149,7 @@ class OmlxProvider
       timeout: timeout,
       client: client,
       dimensions: options?.dimensions,
-      batchSize: options?.batchSize,
+      batchSize: options?.batchSize ?? 512,
       options: options,
     );
   }
