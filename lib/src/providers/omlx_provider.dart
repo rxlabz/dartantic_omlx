@@ -37,7 +37,7 @@ class OmlxProvider
     this.timeout = const Duration(seconds: 300),
     this.client,
   }) : super(
-         baseUrl: baseUrl ?? defaultBaseUrl,
+         baseUrl: OmlxUtils.resolveBaseUrl(baseUrl),
          apiKey: apiKey ?? OmlxUtils.tryGetEnv(apiKeyName ?? defaultApiKeyName),
        );
 
@@ -54,7 +54,13 @@ class OmlxProvider
   static const defaultAudioModel = 'whisper-large-v3';
 
   /// Default base URL for oMLX API.
-  static final defaultBaseUrl = Uri.parse('http://localhost:8000');
+  static final defaultBaseUrl = OmlxUtils.defaultBaseUrl;
+
+  /// Environment variable name for oMLX base URL.
+  static const defaultBaseUrlEnvName = 'OMLX_BASE_URL';
+
+  /// Alternative environment variable name for oMLX host.
+  static const defaultHostEnvName = 'OMLX_HOST';
 
   /// Environment variable name for oMLX API key (optional).
   static const defaultApiKeyName = 'OMLX_API_KEY';

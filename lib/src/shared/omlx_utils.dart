@@ -10,6 +10,31 @@ import 'env_stub.dart' if (dart.library.io) 'env_io.dart' as env;
 abstract final class OmlxUtils {
   static const _uuid = Uuid();
 
+  /// Default base URL for oMLX server (`http://localhost:8000`).
+  static final defaultBaseUrl = Uri.parse('http://localhost:8000');
+
+  /// Resolves the oMLX base URL by checking:
+  /// 1. An explicitly provided [baseUrl]
+  /// 2. `OMLX_BASE_URL` environment variable
+  /// 3. `OMLX_HOST` environment variable
+  /// 4. [defaultBaseUrl] (`http://localhost:8000`)
+  static Uri resolveBaseUrl([Uri? baseUrl]) {
+    if (baseUrl != null) return baseUrl;
+    final envVal = tryGetEnv('OMLX_BASE_URL') ?? tryGetEnv('OMLX_HOST');
+    if (envVal != null && envVal.trim().isNotEmpty) {
+      final trimmed = envVal.trim();
+      final withScheme =
+          (trimmed.startsWith('http://') || trimmed.startsWith('https://'))
+              ? trimmed
+              : 'http://$trimmed';
+      final parsed = Uri.tryParse(withScheme);
+      if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return defaultBaseUrl;
+  }
+
   /// Generates a unique tool call ID for servers that omit one.
   static String generateToolCallId() => _uuid.v4();
 

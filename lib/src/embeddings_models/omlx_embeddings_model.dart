@@ -26,7 +26,7 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
   }) : _client =
            client ??
            o.OmlxClient(
-             baseUrl: (baseUrl ?? defaultBaseUrl).toString(),
+             baseUrl: OmlxUtils.resolveBaseUrl(baseUrl).toString(),
              apiKey: apiKey,
              client: httpClient,
              timeout: timeout,
@@ -46,7 +46,7 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
   }
 
   /// Default base URL for oMLX server.
-  static final defaultBaseUrl = Uri.parse('http://localhost:8000');
+  static final defaultBaseUrl = OmlxUtils.defaultBaseUrl;
 
   static final Logger _logger = Logger('dartantic.embeddings.models.omlx');
 

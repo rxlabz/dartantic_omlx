@@ -33,7 +33,7 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
   }) : _client =
            client ??
            o.OmlxClient(
-             baseUrl: (baseUrl ?? defaultBaseUrl).toString(),
+             baseUrl: OmlxUtils.resolveBaseUrl(baseUrl).toString(),
              apiKey: apiKey,
              client: httpClient,
              timeout: timeout,
@@ -48,7 +48,7 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
   }
 
   /// The default oMLX server URL.
-  static final defaultBaseUrl = Uri.parse('http://localhost:8000');
+  static final defaultBaseUrl = OmlxUtils.defaultBaseUrl;
 
   static final Logger _logger = Logger('dartantic.chat.models.omlx');
 

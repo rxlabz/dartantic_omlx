@@ -3,6 +3,7 @@ import 'package:domlx/domlx.dart' as o;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
+import '../shared/omlx_utils.dart';
 import 'omlx_media_gen_model_options.dart';
 
 /// Media generation model for oMLX using the Text-to-Speech (TTS) endpoint
@@ -23,7 +24,7 @@ class OmlxMediaGenerationModel
   }) : _client =
            client ??
            o.OmlxClient(
-             baseUrl: (baseUrl ?? defaultBaseUrl).toString(),
+             baseUrl: OmlxUtils.resolveBaseUrl(baseUrl).toString(),
              apiKey: apiKey,
              client: httpClient,
              timeout: timeout,
@@ -38,7 +39,7 @@ class OmlxMediaGenerationModel
   }
 
   /// Default base URL for oMLX.
-  static final defaultBaseUrl = Uri.parse('http://localhost:8000');
+  static final defaultBaseUrl = OmlxUtils.defaultBaseUrl;
 
   static final Logger _logger = Logger('dartantic.media.models.omlx');
 

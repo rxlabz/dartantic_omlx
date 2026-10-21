@@ -28,6 +28,45 @@ void main() {
       expect(provider.baseUrl, Uri.parse('http://localhost:8000'));
     });
 
+    test('resolves base URL from OMLX_BASE_URL and OMLX_HOST environment variables', () {
+      final origBase = Agent.environment['OMLX_BASE_URL'];
+      final origHost = Agent.environment['OMLX_HOST'];
+      addTearDown(() {
+        if (origBase != null) {
+          Agent.environment['OMLX_BASE_URL'] = origBase;
+        } else {
+          Agent.environment.remove('OMLX_BASE_URL');
+        }
+        if (origHost != null) {
+          Agent.environment['OMLX_HOST'] = origHost;
+        } else {
+          Agent.environment.remove('OMLX_HOST');
+        }
+      });
+
+      // 1. OMLX_BASE_URL resolution
+      Agent.environment['OMLX_BASE_URL'] = 'https://mac-studio.local:8000';
+      Agent.environment.remove('OMLX_HOST');
+      var provider = OmlxProvider();
+      expect(provider.baseUrl, Uri.parse('https://mac-studio.local:8000'));
+
+      // 2. OMLX_HOST resolution (with auto-prepended http://)
+      Agent.environment.remove('OMLX_BASE_URL');
+      Agent.environment['OMLX_HOST'] = '192.168.1.150:8000';
+      provider = OmlxProvider();
+      expect(provider.baseUrl, Uri.parse('http://192.168.1.150:8000'));
+
+      // 3. OMLX_BASE_URL takes precedence over OMLX_HOST
+      Agent.environment['OMLX_BASE_URL'] = 'http://priority-host:8000';
+      Agent.environment['OMLX_HOST'] = 'ignored-host:8000';
+      provider = OmlxProvider();
+      expect(provider.baseUrl, Uri.parse('http://priority-host:8000'));
+
+      // 4. Explicit baseUrl overrides environment variables
+      provider = OmlxProvider(baseUrl: Uri.parse('http://explicit-url:9000'));
+      expect(provider.baseUrl, Uri.parse('http://explicit-url:9000'));
+    });
+
     test('registers provider with Agent', () {
       OmlxProvider.register();
       expect(Agent.providerFactories.containsKey('omlx'), isTrue);
