@@ -171,6 +171,55 @@ void main() {
       );
     });
 
+    test('rejects unsupported responseFormat with ArgumentError', () {
+      final model = OmlxMediaGenerationModel(name: 'kokoro');
+
+      expect(
+        () => model.generateMediaStream(
+          'Hello',
+          mimeTypes: ['audio/mp3'],
+          options: const OmlxMediaGenerationModelOptions(responseFormat: 'ogg'),
+        ).toList(),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects unsupported audio mimeTypes with UnsupportedError', () {
+      final model = OmlxMediaGenerationModel(name: 'kokoro');
+
+      expect(
+        () => model.generateMediaStream(
+          'Hello',
+          mimeTypes: ['audio/ogg'],
+        ).toList(),
+        throwsUnsupportedError,
+      );
+    });
+
+    test('supports case-insensitive responseFormat', () async {
+      final fakeBytes = Uint8List.fromList([1, 2, 3]);
+      final mock = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['response_format'], 'wav');
+        return http.Response.bytes(fakeBytes, 200, headers: {'content-type': 'audio/wav'});
+      });
+
+      final model = OmlxMediaGenerationModel(
+        name: 'kokoro',
+        httpClient: mock,
+      );
+
+      final results = await model.generateMediaStream(
+        'Hello',
+        mimeTypes: ['audio/mp3'],
+        options: const OmlxMediaGenerationModelOptions(responseFormat: '  WAV  '),
+      ).toList();
+
+      expect(results.length, 1);
+      expect(results.first.metadata['format'], 'wav');
+      expect(results.first.metadata['mime_type'], 'audio/wav');
+    });
+
     test('rejects output schemas', () {
       final model = OmlxMediaGenerationModel(name: 'kokoro');
 

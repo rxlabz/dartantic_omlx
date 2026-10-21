@@ -41,6 +41,21 @@ class OmlxMediaGenerationModel
   /// Default base URL for oMLX.
   static final defaultBaseUrl = OmlxUtils.defaultBaseUrl;
 
+  /// Supported audio formats for oMLX TTS.
+  static const supportedFormats = {'mp3', 'wav', 'opus', 'aac', 'flac', 'pcm'};
+
+  /// Supported audio MIME types for oMLX TTS.
+  static const supportedMimeTypes = {
+    'audio/mp3': 'mp3',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/opus': 'opus',
+    'audio/aac': 'aac',
+    'audio/flac': 'flac',
+    'audio/pcm': 'pcm',
+  };
+
   static final Logger _logger = Logger('dartantic.media.models.omlx');
 
   final o.OmlxClient _client;
@@ -129,20 +144,30 @@ class OmlxMediaGenerationModel
     List<String> mimeTypes,
     String? preferredFormat,
   ) {
-    if (preferredFormat != null && preferredFormat.isNotEmpty) {
-      final mime = switch (preferredFormat.toLowerCase()) {
+    if (preferredFormat != null && preferredFormat.trim().isNotEmpty) {
+      final normalized = preferredFormat.trim().toLowerCase();
+      final mime = switch (normalized) {
+        'mp3' => 'audio/mp3',
         'wav' => 'audio/wav',
         'opus' => 'audio/opus',
         'aac' => 'audio/aac',
         'flac' => 'audio/flac',
         'pcm' => 'audio/pcm',
-        _ => 'audio/mp3',
+        _ => throw ArgumentError.value(
+            preferredFormat,
+            'responseFormat',
+            'Unsupported audio format "$preferredFormat". '
+            'Supported formats: ${supportedFormats.join(', ')}',
+          ),
       };
-      return (mime, preferredFormat.toLowerCase());
+      return (mime, normalized);
     }
 
     for (final mime in mimeTypes) {
-      final lower = mime.toLowerCase();
+      final lower = mime.trim().toLowerCase();
+      if (lower == 'audio/*' || lower == 'audio/mp3' || lower == 'audio/mpeg') {
+        return ('audio/mp3', 'mp3');
+      }
       if (lower == 'audio/wav' || lower == 'audio/x-wav') {
         return ('audio/wav', 'wav');
       }
@@ -150,12 +175,12 @@ class OmlxMediaGenerationModel
       if (lower == 'audio/aac') return ('audio/aac', 'aac');
       if (lower == 'audio/flac') return ('audio/flac', 'flac');
       if (lower == 'audio/pcm') return ('audio/pcm', 'pcm');
-      if (lower == 'audio/mp3' || lower == 'audio/mpeg' || lower == 'audio/*') {
-        return ('audio/mp3', 'mp3');
-      }
     }
 
-    return ('audio/mp3', 'mp3');
+    throw UnsupportedError(
+      'None of the requested audio MIME types are supported: ${mimeTypes.join(', ')}. '
+      'Supported MIME types: ${supportedMimeTypes.keys.join(', ')}, audio/*.',
+    );
   }
 
   @override
