@@ -5,7 +5,7 @@ version: 1.0.0
 repository: https://github.com/rxlabz/dartantic_omlx
 
 environment:
-  sdk: ^3.13π.0
+  sdk: ^3.13.0
 
 dependencies:
   dartantic_ai: ^3.4.2
