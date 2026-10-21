@@ -172,7 +172,7 @@ class OmlxEmbeddingsModel extends EmbeddingsModel<OmlxEmbeddingsModelOptions> {
 
   static List<double> _decodeBase64Float32(String base64String) {
     final bytes = base64Decode(base64String);
-    final byteData = ByteData.sublistView(Uint8List.fromList(bytes));
+    final byteData = ByteData.sublistView(bytes);
     final count = byteData.lengthInBytes ~/ 4;
     final floats = <double>[];
     for (var i = 0; i < count; i++) {

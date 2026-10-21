@@ -37,7 +37,9 @@ class OmlxProvider
     this.timeout = const Duration(seconds: 300),
     this.client,
   }) : super(
-         baseUrl: OmlxUtils.resolveBaseUrl(baseUrl),
+         baseUrl: baseUrl != null
+             ? OmlxUtils.resolveBaseUrl(baseUrl)
+             : (client?.baseUrl ?? OmlxUtils.resolveBaseUrl()),
          apiKey: (apiKey != null && apiKey.isNotEmpty)
              ? apiKey
              : OmlxUtils.tryGetEnv(apiKeyName ?? defaultApiKeyName),

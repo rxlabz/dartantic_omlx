@@ -1112,5 +1112,50 @@ void main() {
       await modelWithOptions.sendStream([ChatMessage.user('Hi')]).drain<void>();
       expect(capturedBody?['temperature'], 0.4);
     });
+
+    test('treats <think> immediately after </think> in the same chunk as literal text', () async {
+      final sseLines = [
+        'data: ${jsonEncode({
+          'id': 'chatcmpl-same-chunk',
+          'object': 'chat.completion.chunk',
+          'created': 1700000000,
+          'model': 'qwen',
+          'choices': [
+            {
+              'index': 0,
+              'delta': {'content': '<think>thought</think>\n\n<think>literal</think> final response'},
+              'finish_reason': 'stop',
+            }
+          ],
+        })}\n\n',
+        'data: [DONE]\n\n',
+      ];
+
+      final mock = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(
+          Stream.fromIterable(sseLines.map(utf8.encode)),
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        );
+      });
+
+      final model = OmlxChatModel(
+        name: 'qwen',
+        httpClient: mock,
+      );
+
+      final results = await model.sendStream([ChatMessage.user('Hi')]).toList();
+      final thinkingParts = results
+          .expand((r) => r.output.parts.whereType<ThinkingPart>())
+          .toList();
+      final textParts = results
+          .expand((r) => r.output.parts.whereType<TextPart>())
+          .toList();
+
+      expect(thinkingParts.length, 1);
+      expect(thinkingParts.first.text, 'thought');
+      expect(textParts.length, 1);
+      expect(textParts.first.text, '<think>literal</think> final response');
+    });
   });
 }

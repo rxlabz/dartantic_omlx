@@ -73,6 +73,31 @@ void main() {
       );
     });
 
+    test('joins multiple text-converted user parts with newline', () {
+      final messages = [
+        ChatMessage.user(
+          'Check this document:',
+          parts: [
+            LinkPart(Uri.parse('https://example.com/document.pdf')),
+            DataPart(
+              Uint8List.fromList([1, 2, 3]),
+              mimeType: 'application/octet-stream',
+            ),
+          ],
+        ),
+      ];
+      final omlxMessages = messages.toOmlxMessages();
+      expect(omlxMessages.length, 1);
+      final msg = omlxMessages.first;
+      expect(msg.role, 'user');
+      expect(msg.content, isA<String>());
+      final lines = (msg.content as String).split('\n');
+      expect(lines.length, 3);
+      expect(lines[0], 'Check this document:');
+      expect(lines[1], 'https://example.com/document.pdf');
+      expect(lines[2], startsWith('[media: application/octet-stream] data:application/octet-stream;base64,'));
+    });
+
     test('expands multiple tool results into separate tool messages', () {
       final messages = [
         ChatMessage(

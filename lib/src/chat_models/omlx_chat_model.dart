@@ -46,7 +46,7 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
        ) {
     _logger.info(
       'Creating oMLX chat model: $name with ${tools?.length ?? 0} tools, '
-      'temp: $temperature, thinking: $enableThinking',
+      'temp: ${this.temperature}, thinking: $enableThinking',
     );
   }
 
@@ -269,7 +269,13 @@ class OmlxChatModel extends ChatModel<OmlxChatOptions> {
                 var after = currentText.substring(thinkEnd + '</think>'.length);
                 pendingPostThinkNewlines = 2;
                 after = stripPostThinkNewlines(after);
-                currentText = after;
+                if (after.isNotEmpty) {
+                  parts.add(TextPart(after));
+                  if (after.trim().isNotEmpty) {
+                    hasEmittedNonWhitespaceText = true;
+                  }
+                }
+                currentText = '';
               } else {
                 // Check if trailing chars form a prefix of '</think>'
                 final potentialPrefix = _findPotentialTagPrefix(

@@ -290,14 +290,19 @@ List<o.ChatMessage> _mapUserMessage(ChatMessage message) {
   }
 
   if (contentParts.isNotEmpty) {
-    final onlyText = contentParts.every((p) => p is o.TextContentPart);
-    messages.add(
-      onlyText
-          ? o.ChatMessage.user(
-              contentParts.cast<o.TextContentPart>().map((p) => p.text).join(),
-            )
-          : o.ChatMessage.userParts(contentParts),
-    );
+    if (contentParts.length == 1 && contentParts.first is o.TextContentPart) {
+      messages.add(
+        o.ChatMessage.user((contentParts.first as o.TextContentPart).text),
+      );
+    } else if (contentParts.every((p) => p is o.TextContentPart)) {
+      messages.add(
+        o.ChatMessage.user(
+          contentParts.cast<o.TextContentPart>().map((p) => p.text).join('\n'),
+        ),
+      );
+    } else {
+      messages.add(o.ChatMessage.userParts(contentParts));
+    }
   } else if (toolResults.isEmpty) {
     messages.add(o.ChatMessage.user(''));
   }

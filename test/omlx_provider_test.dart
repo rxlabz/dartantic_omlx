@@ -65,6 +65,43 @@ void main() {
       // 4. Explicit baseUrl overrides environment variables
       provider = OmlxProvider(baseUrl: Uri.parse('http://explicit-url:9000'));
       expect(provider.baseUrl, Uri.parse('http://explicit-url:9000'));
+
+      // 5. Injected client baseUrl is inherited when baseUrl is not passed
+      final client = o.OmlxClient(baseUrl: 'http://injected-client:7000');
+      provider = OmlxProvider(client: client);
+      expect(provider.baseUrl, Uri.parse('http://injected-client:7000'));
+
+      // 6. Explicit baseUrl overrides injected client baseUrl
+      provider = OmlxProvider(
+        client: client,
+        baseUrl: Uri.parse('http://override-client:8500'),
+      );
+      expect(provider.baseUrl, Uri.parse('http://override-client:8500'));
+    });
+
+    test('resolves apiKey from environment and treats empty string as unset', () {
+      final origKey = Agent.environment['OMLX_API_KEY'];
+      addTearDown(() {
+        if (origKey != null) {
+          Agent.environment['OMLX_API_KEY'] = origKey;
+        } else {
+          Agent.environment.remove('OMLX_API_KEY');
+        }
+      });
+
+      Agent.environment['OMLX_API_KEY'] = 'env-secret-key';
+
+      // 1. Omitted apiKey resolves from environment
+      var provider = OmlxProvider();
+      expect(provider.apiKey, 'env-secret-key');
+
+      // 2. Empty apiKey string is treated as unset and falls back to environment
+      provider = OmlxProvider(apiKey: '');
+      expect(provider.apiKey, 'env-secret-key');
+
+      // 3. Explicit non-empty apiKey overrides environment
+      provider = OmlxProvider(apiKey: 'explicit-key');
+      expect(provider.apiKey, 'explicit-key');
     });
 
     test('registers provider with Agent', () {
