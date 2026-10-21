@@ -1,6 +1,10 @@
+## 1.0.0+1
+
+- Update README.md
+
 ## 1.0.0
 
-- Initial release of `dartantic_omlx`, a [Dartantic AI](https://pub.dev/packages/dartantic_ai) provider for [oMLX](https://github.com/jundot/omlx) on Apple Silicon.
+- Initial release:
 - **`OmlxProvider`**: Global `Agent` registration (`omlx` and `mlx` aliases), automatic model capability discovery (`listModels`), and environment/base URL configuration.
 - **`OmlxChatModel`**:
   - Streaming and non-streaming chat generation (`sendStream`).
